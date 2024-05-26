@@ -47,7 +47,7 @@ byte highByte, lowByte;
 volatile int receiver_input_channel_1, receiver_input_channel_2, receiver_input_channel_3, receiver_input_channel_4;
 int counter_channel_1, counter_channel_2, counter_channel_3, counter_channel_4, loop_counter;
 int esc_1, esc_2, esc_3, esc_4;
-int throttle, battery_voltage;
+int throttle;
 int cal_int, start, gyro_address;
 int receiver_input[5];
 int temperature;
@@ -67,13 +67,17 @@ float pid_i_mem_yaw, pid_yaw_setpoint, gyro_yaw_input, pid_output_yaw, pid_last_
 float angle_roll_acc, angle_pitch_acc, angle_pitch, angle_roll;
 boolean gyro_angles_set;
 
+int led_setup;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Setup routine
+// Setup routine
+// Instead of using external light diod this is using the internal light diod
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup(){
   //Serial.begin(57600);
   //Copy the EEPROM data for fast access data.
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
   for(start = 0; start <= 35; start++)eeprom_data[start] = EEPROM.read(start);
   start = 0;                                                                //Set start back to zero.
   gyro_address = eeprom_data[32];                                           //Store the gyro address in the variable.
@@ -85,9 +89,6 @@ void setup(){
   //Arduino (Atmega) pins default to inputs, so they don't need to be explicitly declared as inputs.
   DDRD |= B11110000;                                                        //Configure digital poort 4, 5, 6 and 7 as output.
   DDRB |= B00110000;                                                        //Configure digital poort 12 and 13 as output.
-
-  //Use the led on the Arduino for startup indication.
-  digitalWrite(12,HIGH);                                                    //Turn on the warning led.
 
   //Check the EEPROM signature to make sure that the setup program is executed.
   while(eeprom_data[33] != 'J' || eeprom_data[34] != 'M' || eeprom_data[35] != 'B')delay(10);
@@ -146,18 +147,11 @@ void setup(){
   }
   start = 0;                                                                //Set start back to 0.
 
-  //Load the battery voltage to the battery_voltage variable.
-  //65 is the voltage compensation for the diode.
-  //12.6V equals ~5V @ Analog 0.
-  //12.6V equals 1023 analogRead(0).
-  //1260 / 1023 = 1.2317.
-  //The variable battery_voltage holds 1050 if the battery voltage is 10.5V.
-  battery_voltage = (analogRead(0) + 65) * 1.2317;
-
   loop_timer = micros();                                                    //Set the timer for the next loop.
 
-  //When everything is done, turn off the led.
-  digitalWrite(12,LOW);                                                     //Turn off the warning led.
+  // When setup is complete switch off the internal led output and
+  // then 3 times blink and off again
+  setup_complete_blink();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Main program loop
@@ -168,13 +162,6 @@ void loop(){
   gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
   gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec.
   gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
-
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
-  //This is the added IMU code from the videos:
-  //https://youtu.be/4BoIE8YQwM8
-  //https://youtu.be/j-kE0AMEWy4
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
   
   //Gyro angle calculations
   //0.0000611 = 1 / (250Hz / 65.5)
@@ -209,7 +196,6 @@ void loop(){
     pitch_level_adjust = 0;                                                 //Set the pitch angle correction to zero.
     roll_level_adjust = 0;                                                  //Set the roll angle correcion to zero.
   }
-
 
   //For starting the motors: throttle low and yaw left (step 1).
   if(receiver_input_channel_3 < 1050 && receiver_input_channel_4 < 1050)start = 1;
@@ -264,15 +250,6 @@ void loop(){
   
   calculate_pid();                                                            //PID inputs are known. So we can calculate the pid output.
 
-  //The battery voltage is needed for compensation.
-  //A complementary filter is used to reduce noise.
-  //0.09853 = 0.08 * 1.2317.
-  battery_voltage = battery_voltage * 0.92 + (analogRead(0) + 65) * 0.09853;
-
-  //Turn on the led if battery voltage is to low.
-  if(battery_voltage < 1000 && battery_voltage > 600)digitalWrite(12, HIGH);
-
-
   throttle = receiver_input_channel_3;                                      //We need the throttle signal as a base signal.
 
   if (start == 2){                                                          //The motors are started.
@@ -281,13 +258,6 @@ void loop(){
     esc_2 = throttle + pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CW)
     esc_3 = throttle + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
     esc_4 = throttle - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
-
-    if (battery_voltage < 1240 && battery_voltage > 800){                   //Is the battery connected?
-      esc_1 += esc_1 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-1 pulse for voltage drop.
-      esc_2 += esc_2 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-2 pulse for voltage drop.
-      esc_3 += esc_3 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-3 pulse for voltage drop.
-      esc_4 += esc_4 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-4 pulse for voltage drop.
-    } 
 
     if (esc_1 < 1100) esc_1 = 1100;                                         //Keep the motors running.
     if (esc_2 < 1100) esc_2 = 1100;                                         //Keep the motors running.
@@ -306,11 +276,6 @@ void loop(){
     esc_3 = 1000;                                                           //If start is not 2 keep a 1000us pulse for ess-3.
     esc_4 = 1000;                                                           //If start is not 2 keep a 1000us pulse for ess-4.
   }
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
-  //Creating the pulses for the ESC's is explained in this video:
-  //https://youtu.be/fqEkVcqxtU8
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   //! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !
   //Because of the angle calculation the loop time is getting very important. If the loop time is 
@@ -448,8 +413,7 @@ void gyro_signalen(){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Subroutine for calculating pid outputs
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//The PID controllers are explained in part 5 of the YMFC-3D video session:
-//https://youtu.be/JBvnB0279-Q 
+//The PID controllers 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void calculate_pid(){
   //Roll calculations
@@ -511,7 +475,7 @@ int convert_receiver_channel(byte function){
     if(reverse == 1)return 1500 + difference;                                  //If the channel is reversed
     else return 1500 - difference;                                             //If the channel is not reversed
   }
-  else if(actual > center){                                                                        //The actual receiver value is higher than the center value
+  else if(actual > center){                                                    //The actual receiver value is higher than the center value
     if(actual > high)actual = high;                                            //Limit the lowest value to the value that was detected during setup
     difference = ((long)(actual - center) * (long)500) / (high - center);      //Calculate and scale the actual value to a 1000 - 2000us value
     if(reverse == 1)return 1500 - difference;                                  //If the channel is reversed
@@ -557,3 +521,13 @@ void set_gyro_registers(){
   }  
 }
 
+void setup_complete_blink(){
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(2000);
+  for (led_setup = 0; led_setup < 3; led_setup ++) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(500);
+  }
+}
