@@ -2,13 +2,13 @@
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 
-int Rx_pin = 4;
-int Tx_pin = 3;
+int Rx_pin = 4; // yellow
+int Tx_pin = 3; // white
 
 String outStr = "";
 byte readByte = 0;
 
-LiquidCrystal_I2C lcd(0x27,20,4); 
+LiquidCrystal_I2C lcd(0x27,20,4); // green SCL, blue SDA
 SoftwareSerial SerialGPS(Rx_pin, Tx_pin);
 
 float main_n = 54.4056999;
@@ -59,9 +59,9 @@ void loop()
         }
 
         lcd.setCursor(0,0);
-        //lcd.print("  " + n_pos + "  ");
+        lcd.print("  " + n_pos + "  ");
         //lcd.print((String)n_diff);
-        lcd.print(up_str_block);
+        // lcd.print(up_str_block);
 
         // Print at lcd longitude at first string
         point_index = outStr.indexOf('.', 20);
@@ -86,8 +86,8 @@ void loop()
         }
 
         lcd.setCursor(0,1);
-        //lcd.print("  " + e_pos + "  ");
-        lcd.print(dn_str_block);
+        lcd.print("  " + e_pos + "  ");
+        // lcd.print(dn_str_block);
         //Serial.println(up_str);
         //Serial.println(dn_str);
         //Serial.println(n_diff * 10000);

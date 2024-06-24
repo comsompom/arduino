@@ -1,13 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////////////
-//Terms of use
-///////////////////////////////////////////////////////////////////////////////////////
-//THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//THE SOFTWARE.
+// Before Setup Make the ESC callibration (in case if the first constrauction is going)
+// If the Drone is ready and all parts connected, just run the Setup
+// especially if the Other Transmitter is using
+// Start the Setup and  make all that needs
+// when setup is complete, and message "Setup is finished." Appeared
+// do not disconnect the Arduino, but upload the Flight controller scetch
 ///////////////////////////////////////////////////////////////////////////////////////
 //Safety note
 ///////////////////////////////////////////////////////////////////////////////////////
