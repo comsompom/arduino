@@ -334,6 +334,7 @@ ISR(PCINT0_vect){
       last_channel_1 = 1;                                                   //Remember current input state.
       timer_1 = current_time;                                               //Set timer_1 to current_time.
     }
+    no_signal_move = 0;
   }
   else if(last_channel_1 == 1){                                             //Input 8 is not high and changed from 1 to 0.
     last_channel_1 = 0;                                                     //Remember current input state.
@@ -345,6 +346,7 @@ ISR(PCINT0_vect){
       last_channel_2 = 1;                                                   //Remember current input state.
       timer_2 = current_time;                                               //Set timer_2 to current_time.
     }
+    no_signal_move = 0;
   }
   else if(last_channel_2 == 1){                                             //Input 9 is not high and changed from 1 to 0.
     last_channel_2 = 0;                                                     //Remember current input state.
@@ -356,6 +358,7 @@ ISR(PCINT0_vect){
       last_channel_3 = 1;                                                   //Remember current input state.
       timer_3 = current_time;                                               //Set timer_3 to current_time.
     }
+    no_signal_move = 0;
   }
   else if(last_channel_3 == 1){                                             //Input 10 is not high and changed from 1 to 0.
     last_channel_3 = 0;                                                     //Remember current input state.
@@ -368,6 +371,7 @@ ISR(PCINT0_vect){
       last_channel_4 = 1;                                                   //Remember current input state.
       timer_4 = current_time;                                               //Set timer_4 to current_time.
     }
+    no_signal_move = 0;
   }
   else if(last_channel_4 == 1){                                             //Input 11 is not high and changed from 1 to 0.
     last_channel_4 = 0;                                                     //Remember current input state.
