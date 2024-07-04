@@ -2,7 +2,7 @@
 // ---------------------------------------------------------------------------
 // Customize here pulse lengths as needed
 #define MIN_PULSE_LENGTH 1000 // Minimum pulse length in µs
-#define MAX_PULSE_LENGTH 2600 // Maximum pulse length in µs
+#define MAX_PULSE_LENGTH 2000 // Maximum pulse length in µs
 // ---------------------------------------------------------------------------
 Servo motA, motB, motC, motD;
 int counter = 3;

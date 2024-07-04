@@ -16,7 +16,7 @@
  // 5. Power ON ESC. and wait beeps finished
  // 6. Move throtle to the down position and wait ESC finished beep
  // 7. Power Off FSIA6b Transmitter
- // 8. Power On FSIA6b Transmitter and move throttle little the ESC schoul send the signal and motor start.
+ // 8. Power On FSIA6b Transmitter and move throttle little the ESC schould send the signal and motor start.
  // 9. Move throttle down motor should stop
  // 10. Power OFF ESC, Power OFF Transmitter. Calibration complete
 // ---------------------------------------------------------------------------
