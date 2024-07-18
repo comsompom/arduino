@@ -21,10 +21,10 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //PID gain and limit settings
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-float pid_p_gain_roll = 1.5;               //Gain setting for the roll P-controller - def 1.3
-float pid_i_gain_roll = 0.06;              //Gain setting for the roll I-controller - def 0.04
-float pid_d_gain_roll = 12.0;              //Gain setting for the roll D-controller - def 18.0
-int pid_max_roll = 350;                    //Maximum output of the PID-controller (+/-) - def 400
+float pid_p_gain_roll = 1.2;               //Gain setting for the roll P-controller - def 1.3
+float pid_i_gain_roll = 0.02;              //Gain setting for the roll I-controller - def 0.04
+float pid_d_gain_roll = 10.0;              //Gain setting for the roll D-controller - def 18.0
+int pid_max_roll = 300;                    //Maximum output of the PID-controller (+/-) - def 400
 
 float pid_p_gain_pitch = pid_p_gain_roll;  //Gain setting for the pitch P-controller.
 float pid_i_gain_pitch = pid_i_gain_roll;  //Gain setting for the pitch I-controller.
@@ -36,7 +36,7 @@ float pid_i_gain_yaw = 0.02;               //Gain setting for the pitch I-contro
 float pid_d_gain_yaw = 0.0;                //Gain setting for the pitch D-controller. def 0.0
 int pid_max_yaw = 300;                     //Maximum output of the PID-controller (+/-) def 400
 
-boolean auto_level = true;                 //Auto level on (true) or off (false)
+boolean auto_level = false;                 //Auto level on (true) or off (false)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Declaring global variables
@@ -155,8 +155,8 @@ void loop(){
 
   //65.5 = 1 deg/sec (check the datasheet of the MPU-6050 for more information).
   gyro_roll_input = (gyro_roll_input * 0.7) + ((gyro_roll / 65.5) * 0.3);   //Gyro pid input is deg/sec.
-  gyro_pitch_input = (gyro_pitch_input * 0.8) + ((gyro_pitch / 65.5) * 0.2);//Gyro pid input is deg/sec. def (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);
-  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
+  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);//Gyro pid input is deg/sec. def (gyro_pitch_input * 0.7) + ((gyro_pitch / 65.5) * 0.3);
+  gyro_yaw_input = (gyro_yaw_input * 0.3) + ((gyro_yaw / 65.5) * 0.3);      //Gyro pid input is deg/sec.
   
   //Gyro angle calculations
   //0.0000611 = 1 / (250Hz / 65.5)
