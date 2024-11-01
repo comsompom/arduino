@@ -19,14 +19,6 @@
 #include <EEPROM.h>                        //Include the EEPROM.h library so we can store information onto the EEPROM
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// correction for each separate ESC
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int esc_1_cor = -70;   // -130
-int esc_2_cor = -70;     // 90
-int esc_3_cor = 80;    // 130
-int esc_4_cor = 80;  // -130
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //PID gain and limit settings
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 float pid_p_gain_roll = 1.2;               //Gain setting for the roll P-controller - def 1.3
@@ -45,6 +37,13 @@ float pid_d_gain_yaw = 0.0;                //Gain setting for the pitch D-contro
 int pid_max_yaw = 100;                     //Maximum output of the PID-controller (+/-) def 400
 
 boolean auto_level = false;                 //Auto level on (true) or off (false)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Auto flight variables
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int time_counter;
+int stage_fly;
+float up_down_signal;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Declaring global variables
@@ -139,18 +138,25 @@ void setup(){
   PCMSK0 |= (1 << PCINT3);                                                  //Set PCINT3 (digital input 11)to trigger an interrupt on state change.
 
   //Wait until the receiver is active and the throtle is set to the lower position.
-  while(receiver_input_channel_3 < 990 || receiver_input_channel_3 > 1020 || receiver_input_channel_4 < 1400){
-    receiver_input_channel_3 = convert_receiver_channel(3);                 //Convert the actual receiver signals for throttle to the standard 1000 - 2000us
-    receiver_input_channel_4 = convert_receiver_channel(4);                 //Convert the actual receiver signals for yaw to the standard 1000 - 2000us
-    //We don't want the esc's to be beeping annoyingly. So let's give them a 1000us puls while waiting for the receiver inputs.
-    PORTD |= B11110000;                                                     //Set digital poort 4, 5, 6 and 7 high.
-    delayMicroseconds(1000);                                                //Wait 1000us.
-    PORTD &= B00001111;                                                     //Set digital poort 4, 5, 6 and 7 low.
-    delay(3);                                                               //Wait 3 milliseconds before the next loop.
-  }
+  // while(receiver_input_channel_3 < 990 || receiver_input_channel_3 > 1020 || receiver_input_channel_4 < 1400){
+  //   receiver_input_channel_3 = convert_receiver_channel(3);                 //Convert the actual receiver signals for throttle to the standard 1000 - 2000us
+  //   receiver_input_channel_4 = convert_receiver_channel(4);                 //Convert the actual receiver signals for yaw to the standard 1000 - 2000us
+  //   //We don't want the esc's to be beeping annoyingly. So let's give them a 1000us puls while waiting for the receiver inputs.
+  //   PORTD |= B11110000;                                                     //Set digital poort 4, 5, 6 and 7 high.
+  //   delayMicroseconds(1000);                                                //Wait 1000us.
+  //   PORTD &= B00001111;                                                     //Set digital poort 4, 5, 6 and 7 low.
+  //   delay(3);                                                               //Wait 3 milliseconds before the next loop.
+  // }
+  receiver_input_channel_3 = 1000;
+  receiver_input_channel_4 = 1000;
   start = 0;                                                                //Set start back to 0.
 
   loop_timer = micros();                                                    //Set the timer for the next loop.
+
+  // set auto flight variable to start values
+  time_counter = 1;
+  stage_fly = 0;
+  up_down_signal = 1000;
 
   // When setup is complete switch off the internal led output and
   // then 3 times blink and off again
@@ -200,6 +206,9 @@ void loop(){
     roll_level_adjust = 0;                                                  //Set the roll angle correcion to zero.
   }
 
+  check_stage();
+  if(start == 2) receiver_input_channel_3 = up_down_signal;
+  
   //For starting the motors: throttle low and yaw left (step 1).
   if(receiver_input_channel_3 < 1050 && receiver_input_channel_4 < 1050)start = 1;
   //When yaw stick is back in the center position start the motors (step 2).
@@ -261,11 +270,6 @@ void loop(){
     esc_2 = throttle + pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CW)
     esc_3 = throttle + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
     esc_4 = throttle - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
-
-    esc_1 += esc_1_cor;
-    esc_2 += esc_2_cor;
-    esc_3 += esc_3_cor;
-    esc_4 += esc_4_cor;
 
     if (esc_1 < 1100) esc_1 = 1100;                                         //Keep the motors running.
     if (esc_2 < 1100) esc_2 = 1100;                                         //Keep the motors running.
@@ -539,5 +543,30 @@ void internal_lamp_complete_blink(int led_setup){
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
     delay(500);
+  }
+}
+
+void check_stage() {
+  time_counter += 1;
+
+  if(time_counter == 2000 & stage_fly <= 6){
+    stage_fly += 1;
+    time_counter = 0;
+    start = 2;
+  }
+
+  if(time_counter == 2000 & stage_fly == 7){
+    stage_fly = 0;
+    time_counter = 0;
+    start = 0;
+  }
+
+  if(time_counter < 2000){
+    if(stage_fly > 0 & stage_fly < 4){
+      up_down_signal += (int)((time_counter / 1800));
+    }
+    if(stage_fly > 3 & stage_fly < 7){
+      up_down_signal -= (int)((time_counter / 1800));
+    }
   }
 }
