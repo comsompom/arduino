@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 Servo mot1, mot2, mot3, mot4;
 char data;
+int CUR_PULSE_LENGTH;
 // ---------------------------------------------------------------------------
 
 /**
@@ -41,6 +42,8 @@ void setup() {
     mot2.attach(5, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
     mot3.attach(6, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
     mot4.attach(7, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
+
+    CUR_PULSE_LENGTH = MIN_PULSE_LENGTH;
     
     displayInstructions();
 }
@@ -50,11 +53,13 @@ void setup() {
  */
 void loop() {
     if (Serial.available()) {
+        Serial.println(CUR_PULSE_LENGTH);
         data = Serial.read();
 
         switch (data) {
             // 0
             case 48 : Serial.println("Sending minimum throttle");
+                      CUR_PULSE_LENGTH = MIN_PULSE_LENGTH;
                       mot1.writeMicroseconds(MIN_PULSE_LENGTH);
                       mot2.writeMicroseconds(MIN_PULSE_LENGTH);
                       mot3.writeMicroseconds(MIN_PULSE_LENGTH);
@@ -62,15 +67,21 @@ void loop() {
             break;
 
             // 1
-            case 49 : Serial.println("Sending maximum throttle");
-                      // mot1.writeMicroseconds(MAX_PULSE_LENGTH);
-                      // mot2.writeMicroseconds(MAX_PULSE_LENGTH);
-                      // mot3.writeMicroseconds(MAX_PULSE_LENGTH);
-                      // mot4.writeMicroseconds(MAX_PULSE_LENGTH);
+            case 49 : Serial.println("INCREASE 100 throttle");
+                      Serial.println(" 1...");
+                      delay(1000);
+                      send_throttle_up();
             break;
 
             // 2
-            case 50 : Serial.print("Running test in 3");
+            case 50 : Serial.println("DECREASE 100 throttle");
+                      Serial.println(" 1...");
+                      delay(1000);
+                      send_throttle_down();
+            break;
+
+            // 3
+            case 51 : Serial.print("Running test in 3");
                       delay(1000);
                       Serial.print(" 2");
                       delay(1000);
@@ -82,6 +93,34 @@ void loop() {
     }
     
 
+}
+
+void send_throttle_up(){
+    for (int i = 0; i <= 50; i += 10) {
+        CUR_PULSE_LENGTH += 10;
+        Serial.println(CUR_PULSE_LENGTH);
+
+        mot1.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot2.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot3.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot4.writeMicroseconds(CUR_PULSE_LENGTH);
+            
+        delay(200);
+    }
+}
+
+void send_throttle_down(){
+    for (int i = 0; i <= 50; i += 10) {
+        CUR_PULSE_LENGTH -= 10;
+        Serial.println(CUR_PULSE_LENGTH);
+
+        mot1.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot2.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot3.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot4.writeMicroseconds(CUR_PULSE_LENGTH);
+            
+        delay(200);
+    }
 }
 
 /**
@@ -100,7 +139,7 @@ void test()
         mot3.writeMicroseconds(i);
         mot4.writeMicroseconds(i);
         
-        delay(100);
+        delay(200);
     }
 
     for (int i = TEST_PULSE_LENGTH; i >= MIN_PULSE_LENGTH; i -= 40) {
@@ -113,7 +152,7 @@ void test()
         mot3.writeMicroseconds(i);
         mot4.writeMicroseconds(i);
         
-        delay(100);
+        delay(200);
     }
 
     Serial.println("STOP");
@@ -130,6 +169,7 @@ void displayInstructions()
 {  
     Serial.println("READY - PLEASE SEND INSTRUCTIONS AS FOLLOWING :");
     Serial.println("\t0 : Send min throttle");
-    Serial.println("\t1 : Send max throttle");
-    Serial.println("\t2 : Run test function\n");
+    Serial.println("\t1 : INCREASE throttle");
+    Serial.println("\t2 : DECREASE function");
+    Serial.println("\t3 : Send Test function\n");
 }
