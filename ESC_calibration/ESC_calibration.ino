@@ -100,10 +100,10 @@ void send_throttle_up(){
         CUR_PULSE_LENGTH += 10;
         Serial.println(CUR_PULSE_LENGTH);
 
-        mot1.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot1.writeMicroseconds(CUR_PULSE_LENGTH + 10);
         mot2.writeMicroseconds(CUR_PULSE_LENGTH);
         mot3.writeMicroseconds(CUR_PULSE_LENGTH);
-        mot4.writeMicroseconds(CUR_PULSE_LENGTH);
+        mot4.writeMicroseconds(CUR_PULSE_LENGTH + 10);
             
         delay(200);
     }
