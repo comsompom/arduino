@@ -21,8 +21,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //PID gain and limit settings
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-float pid_p_gain_roll = 1.2;               //Gain setting for the roll P-controller - def 1.3
-float pid_i_gain_roll = 0.02;              //Gain setting for the roll I-controller - def 0.04
+float pid_p_gain_roll = 1.3;               //Gain setting for the roll P-controller - def 1.3
+float pid_i_gain_roll = 0.04;              //Gain setting for the roll I-controller - def 0.04
 float pid_d_gain_roll = 18.0;              //Gain setting for the roll D-controller - def 18.0
 int pid_max_roll = 150;                    //Maximum output of the PID-controller (+/-) - def 400
 
@@ -36,7 +36,7 @@ float pid_i_gain_yaw = 0.02;               //Gain setting for the pitch I-contro
 float pid_d_gain_yaw = 0.0;                //Gain setting for the pitch D-controller. def 0.0
 int pid_max_yaw = 100;                     //Maximum output of the PID-controller (+/-) def 400
 
-boolean auto_level = false;                 //Auto level on (true) or off (false)
+boolean auto_level = true;                 //Auto level on (true) or off (false)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Declaring global variables
