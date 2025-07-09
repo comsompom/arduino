@@ -3,7 +3,7 @@
 
 // For NEO-6M, typical baud rate is 9600.
 // If using software serial (e.g., not on hardware RX/TX pins 0,1):
-SoftwareSerial gpsSerial(4, 3); // RX, TX (connect GPS TX to Arduino pin 2, GPS RX to Arduino pin 3)
+SoftwareSerial gpsSerial(4, 3); // RX, TX (connect GPS TX to Arduino pin 4, GPS RX to Arduino pin 3)
 
 TinyGPSPlus gps; // The TinyGPS++ object
 
