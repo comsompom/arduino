@@ -48,7 +48,6 @@ boolean auto_level = true;                 //Auto level on (true) or off (false)
 //Declaring global variables
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 byte eeprom_data[36];
-byte highByte, lowByte;
 int cal_int, start, gyro_address;
 int temperature;
 int acc_axis[4], gyro_axis[4];
@@ -63,7 +62,7 @@ float pid_i_mem_roll, pid_roll_setpoint, gyro_roll_input, pid_output_roll, pid_l
 float pid_i_mem_pitch, pid_pitch_setpoint, gyro_pitch_input, pid_output_pitch, pid_last_pitch_d_error;
 float pid_i_mem_yaw, pid_yaw_setpoint, gyro_yaw_input, pid_output_yaw, pid_last_yaw_d_error;
 float angle_roll_acc, angle_pitch_acc, angle_pitch, angle_roll;
-float pid_i_mem_altitude, pid_altitude_setpoint, altitude_input, pid_output_altitude, pid_last_altitude_d_error;
+float pid_i_mem_altitude, pid_output_altitude, pid_last_altitude_d_error;
 boolean gyro_angles_set;
 
 // Flight control variables
@@ -105,24 +104,11 @@ void setup(){
 
   set_gyro_registers();                                                     
 
-  // Initial calibration
-  for (cal_int = 0; cal_int < 2000 ; cal_int ++){                           
-    if(cal_int % 15 == 0)digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));                
-    gyro_signalen();                                                        
-    gyro_axis_cal[1] += gyro_axis[1];                                       
-    gyro_axis_cal[2] += gyro_axis[2];                                       
-    gyro_axis_cal[3] += gyro_axis[3];                                       
-    //We don't want the esc's to be beeping annoyingly. So let's give them a 1000us puls while calibrating the gyro.
-    PORTD |= B11110000;                                                     
-    delayMicroseconds(1000);                                                
-    PORTD &= B00001111;                                                     
-    delay(3);                                                               
-  }
-  
-  //Now that we have 2000 measures, we need to divide by 2000 to get the average gyro offset.
-  gyro_axis_cal[1] /= 2000;                                                 
-  gyro_axis_cal[2] /= 2000;                                                 
-  gyro_axis_cal[3] /= 2000;                                                 
+  // Two-step gyro calibration
+  // 1. First calibration: motors off
+  calibrate_gyro(2000, 0);
+  // 2. Second calibration: motors at 1100 (props OFF for safety!)
+  calibrate_gyro(2000, 1100);
 
   // Initialize flight control variables
   flight_start_timer = millis();
@@ -310,60 +296,6 @@ void loop(){
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//This routine is called every time input 8, 9, 10 or 11 changed state. This is used to read the receiver signals. 
-//More information about this subroutine can be found in this video:
-//https://youtu.be/bENjl1KQbvo
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-ISR(PCINT0_vect){
-  current_time = micros();
-  //Channel 1=========================================
-  if(PINB & B00000001){                                                     //Is input 8 high?
-    if(last_channel_1 == 0){                                                //Input 8 changed from 0 to 1.
-      last_channel_1 = 1;                                                   //Remember current input state.
-      timer_1 = current_time;                                               //Set timer_1 to current_time.
-    }
-  }
-  else if(last_channel_1 == 1){                                             //Input 8 is not high and changed from 1 to 0.
-    last_channel_1 = 0;                                                     //Remember current input state.
-    receiver_input[1] = current_time - timer_1;                             //Channel 1 is current_time - timer_1.
-  }
-  //Channel 2=========================================
-  if(PINB & B00000010 ){                                                    //Is input 9 high?
-    if(last_channel_2 == 0){                                                //Input 9 changed from 0 to 1.
-      last_channel_2 = 1;                                                   //Remember current input state.
-      timer_2 = current_time;                                               //Set timer_2 to current_time.
-    }
-  }
-  else if(last_channel_2 == 1){                                             //Input 9 is not high and changed from 1 to 0.
-    last_channel_2 = 0;                                                     //Remember current input state.
-    receiver_input[2] = current_time - timer_2;                             //Channel 2 is current_time - timer_2.
-  }
-  //Channel 3=========================================
-  if(PINB & B00000100 ){                                                    //Is input 10 high?
-    if(last_channel_3 == 0){                                                //Input 10 changed from 0 to 1.
-      last_channel_3 = 1;                                                   //Remember current input state.
-      timer_3 = current_time;                                               //Set timer_3 to current_time.
-    }
-  }
-  else if(last_channel_3 == 1){                                             //Input 10 is not high and changed from 1 to 0.
-    last_channel_3 = 0;                                                     //Remember current input state.
-    receiver_input[3] = current_time - timer_3;                             //Channel 3 is current_time - timer_3.
-
-  }
-  //Channel 4=========================================
-  if(PINB & B00001000 ){                                                    //Is input 11 high?
-    if(last_channel_4 == 0){                                                //Input 11 changed from 0 to 1.
-      last_channel_4 = 1;                                                   //Remember current input state.
-      timer_4 = current_time;                                               //Set timer_4 to current_time.
-    }
-  }
-  else if(last_channel_4 == 1){                                             //Input 11 is not high and changed from 1 to 0.
-    last_channel_4 = 0;                                                     //Remember current input state.
-    receiver_input[4] = current_time - timer_4;                             //Channel 4 is current_time - timer_4.
-  }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Subroutine for reading the gyro
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void gyro_signalen(){
@@ -373,11 +305,6 @@ void gyro_signalen(){
     Wire.write(0x3B);                                                       //Start reading @ register 43h and auto increment with every read.
     Wire.endTransmission();                                                 //End the transmission.
     Wire.requestFrom(gyro_address,14);                                      //Request 14 bytes from the gyro.
-    
-    receiver_input_channel_1 = convert_receiver_channel(1);                 //Convert the actual receiver signals for pitch to the standard 1000 - 2000us.
-    receiver_input_channel_2 = convert_receiver_channel(2);                 //Convert the actual receiver signals for roll to the standard 1000 - 2000us.
-    receiver_input_channel_3 = convert_receiver_channel(3);                 //Convert the actual receiver signals for throttle to the standard 1000 - 2000us.
-    receiver_input_channel_4 = convert_receiver_channel(4);                 //Convert the actual receiver signals for yaw to the standard 1000 - 2000us.
     
     while(Wire.available() < 14);                                           //Wait until the 14 bytes are received.
     acc_axis[1] = Wire.read()<<8|Wire.read();                               //Add the low and high byte to the acc_x variable.
@@ -452,37 +379,6 @@ void calculate_pid(){
   pid_last_yaw_d_error = pid_error_temp;
 }
 
-//This part converts the actual receiver signals to a standardized 1000 – 1500 – 2000 microsecond value.
-//The stored data in the EEPROM is used.
-int convert_receiver_channel(byte function){
-  byte channel, reverse;                                                       //First we declare some local variables
-  int low, center, high, actual;
-  int difference;
-
-  channel = eeprom_data[function + 23] & 0b00000111;                           //What channel corresponds with the specific function
-  if(eeprom_data[function + 23] & 0b10000000)reverse = 1;                      //Reverse channel when most significant bit is set
-  else reverse = 0;                                                            //If the most significant is not set there is no reverse
-
-  actual = receiver_input[channel];                                            //Read the actual receiver value for the corresponding function
-  low = (eeprom_data[channel * 2 + 15] << 8) | eeprom_data[channel * 2 + 14];  //Store the low value for the specific receiver input channel
-  center = (eeprom_data[channel * 2 - 1] << 8) | eeprom_data[channel * 2 - 2]; //Store the center value for the specific receiver input channel
-  high = (eeprom_data[channel * 2 + 7] << 8) | eeprom_data[channel * 2 + 6];   //Store the high value for the specific receiver input channel
-
-  if(actual < center){                                                         //The actual receiver value is lower than the center value
-    if(actual < low)actual = low;                                              //Limit the lowest value to the value that was detected during setup
-    difference = ((long)(center - actual) * (long)500) / (center - low);       //Calculate and scale the actual value to a 1000 - 2000us value
-    if(reverse == 1)return 1500 + difference;                                  //If the channel is reversed
-    else return 1500 - difference;                                             //If the channel is not reversed
-  }
-  else if(actual > center){                                                    //The actual receiver value is higher than the center value
-    if(actual > high)actual = high;                                            //Limit the lowest value to the value that was detected during setup
-    difference = ((long)(actual - center) * (long)500) / (high - center);      //Calculate and scale the actual value to a 1000 - 2000us value
-    if(reverse == 1)return 1500 - difference;                                  //If the channel is reversed
-    else return 1500 + difference;                                             //If the channel is not reversed
-  }
-  else return 1500;
-}
-
 void set_gyro_registers(){
   //Setup the MPU-6050
   if(eeprom_data[31] == 1){
@@ -529,4 +425,37 @@ void setup_complete_blink(){
     digitalWrite(LED_BUILTIN, LOW);
     delay(500);
   }
+}
+
+// Add calibration function before setup
+void calibrate_gyro(int samples, int motor_speed) {
+  // Reset calibration accumulators
+  gyro_axis_cal[1] = 0;
+  gyro_axis_cal[2] = 0;
+  gyro_axis_cal[3] = 0;
+
+  for (cal_int = 0; cal_int < samples; cal_int++) {
+    if (cal_int % 15 == 0) digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    gyro_signalen();
+    gyro_axis_cal[1] += gyro_axis[1];
+    gyro_axis_cal[2] += gyro_axis[2];
+    gyro_axis_cal[3] += gyro_axis[3];
+
+    // Run motors at the specified speed (props OFF for safety!)
+    if (motor_speed > 0) {
+      esc_1 = esc_2 = esc_3 = esc_4 = motor_speed;
+      PORTD |= B11110000;
+      delayMicroseconds(motor_speed);
+      PORTD &= B00001111;
+    } else {
+      // Just send a short pulse to keep ESCs quiet
+      PORTD |= B11110000;
+      delayMicroseconds(1000);
+      PORTD &= B00001111;
+    }
+    delay(3);
+  }
+  gyro_axis_cal[1] /= samples;
+  gyro_axis_cal[2] /= samples;
+  gyro_axis_cal[3] /= samples;
 }
