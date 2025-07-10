@@ -55,6 +55,8 @@ float roll_level_adjust, pitch_level_adjust;
 long acc_x, acc_y, acc_z, acc_total_vector;
 unsigned long timer_1, timer_2, timer_3, timer_4, current_time;
 unsigned long loop_timer;
+// Add missing ESC timer channels for output pulse timing
+unsigned long timer_channel_1, timer_channel_2, timer_channel_3, timer_channel_4;
 double gyro_pitch, gyro_roll, gyro_yaw;
 double gyro_axis_cal[4];
 float pid_error_temp;
