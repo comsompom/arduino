@@ -17,6 +17,7 @@
 
 #include <Wire.h>                          //Include the Wire.h library so we can communicate with the gyro.
 #include <EEPROM.h>                        //Include the EEPROM.h library so we can store information onto the EEPROM
+#include <Servo.h>                         //Include the Servo library for ESC PWM output
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //PID gain and limit settings
@@ -79,10 +80,19 @@ int throttle;
 
 int led_setup;
 
+// Declare Servo objects for each ESC
+Servo esc1, esc2, esc3, esc4;
+
+// Add forward distance tracking
+float forward_distance = 0;
+unsigned long forward_start_time = 0;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup routine
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup(){
+  Serial.begin(9600);
+  Serial.println("YMFC-AL setup starting...");
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
   
@@ -96,6 +106,12 @@ void setup(){
   //Arduino (Atmega) pins default to inputs, so they don't need to be explicitly declared as inputs.
   DDRD |= B11110000;                                                        //Configure digital poort 4, 5, 6 and 7 as output.
   DDRB |= B00110000;                                                        //Configure digital poort 12 and 13 as output.
+
+  //Attach ESCs to pins 4, 5, 6, 7
+  esc1.attach(4);
+  esc2.attach(5);
+  esc3.attach(6);
+  esc4.attach(7);
 
   //Check the EEPROM signature to make sure that the setup program is executed.
   while(eeprom_data[33] != 'J' || eeprom_data[34] != 'M' || eeprom_data[35] != 'B')delay(10);
@@ -111,6 +127,17 @@ void setup(){
   calibrate_gyro(2000, 0);
   // 2. Second calibration: motors at 1100 (props OFF for safety!)
   calibrate_gyro(2000, 1100);
+
+  // Arm ESCs: send 1000us to all motors for 5 seconds
+  unsigned long arm_start = millis();
+  while (millis() - arm_start < 5000) {
+    esc_1 = esc_2 = esc_3 = esc_4 = 1000;
+    esc1.writeMicroseconds(esc_1);
+    esc2.writeMicroseconds(esc_2);
+    esc3.writeMicroseconds(esc_3);
+    esc4.writeMicroseconds(esc_4);
+    delay(20); // repeat at ~50Hz
+  }
 
   // Initialize flight control variables
   flight_start_timer = millis();
@@ -145,7 +172,10 @@ void setup(){
 void loop(){
   // Flight control state machine
   unsigned long flight_time = millis() - flight_start_timer;
-  
+  static unsigned long last_loop_time = 0;
+  float dt = (last_loop_time == 0) ? 0.004 : (micros() - last_loop_time) / 1000000.0;
+  last_loop_time = micros();
+
   // State machine for autonomous flight
   switch(flight_phase) {
     case 0: // Wait 5 seconds before takeoff
@@ -154,28 +184,38 @@ void loop(){
         target_altitude = 100; // Target 1 meter (100 cm)
       }
       break;
-      
-    case 1: // Rising to 1 meter
-      if(current_altitude >= 95) { // Allow 5cm tolerance
-        flight_phase = 2;
-        forward_speed = 30; // Start moving forward
+    case 1: // Hold at 1 meter
+      if(current_altitude >= 95 && current_altitude <= 105) {
+        // Hold for 1 second at 1 meter
+        static unsigned long hold_start = 0;
+        if (hold_start == 0) hold_start = millis();
+        if (millis() - hold_start > 1000) {
+          flight_phase = 2;
+          forward_speed = 30; // Start moving forward
+          forward_distance = 0;
+          forward_start_time = millis();
+          hold_start = 0;
+        }
+      } else {
+        // Reset hold timer if not in range
+        static unsigned long hold_start = 0;
+        hold_start = 0;
       }
       break;
-      
-    case 2: // Moving forward
-      if(flight_time > 12000) { // After ~7 seconds of forward movement (5s + 7s = 12s)
+    case 2: // Moving forward for 1 meter
+      // Integrate forward distance (very simple: forward_speed * dt)
+      forward_distance += abs(forward_speed) * dt; // cm/s * s = cm
+      if(forward_distance >= 100) { // 1 meter
         flight_phase = 3;
         forward_speed = 0;
         target_altitude = 0; // Begin descent
       }
       break;
-      
     case 3: // Landing
       if(current_altitude < 5) { // Almost at ground level
         flight_phase = 4;
       }
       break;
-      
     case 4: // Flight complete - motors off
       target_altitude = 0;
       forward_speed = 0;
@@ -280,21 +320,21 @@ void loop(){
   while(micros() - loop_timer < 4000);                                      
   loop_timer = micros();                                                    
 
-  PORTD |= B11110000;                                                       
-  timer_channel_1 = esc_1 + loop_timer;                                     
-  timer_channel_2 = esc_2 + loop_timer;                                     
-  timer_channel_3 = esc_3 + loop_timer;                                     
-  timer_channel_4 = esc_4 + loop_timer;                                     
+  // Debug output for ESC values
+  Serial.print("ESC1: "); Serial.print(esc_1);
+  Serial.print(" ESC2: "); Serial.print(esc_2);
+  Serial.print(" ESC3: "); Serial.print(esc_3);
+  Serial.print(" ESC4: "); Serial.println(esc_4);
+
+  // Update ESCs using Servo library
+  esc1.writeMicroseconds(esc_1);
+  esc2.writeMicroseconds(esc_2);
+  esc3.writeMicroseconds(esc_3);
+  esc4.writeMicroseconds(esc_4);
   
   gyro_signalen();
 
-  while(PORTD >= 16){                                                       
-    current_time = micros();                                              
-    if(timer_channel_1 <= current_time)PORTD &= B11101111;                
-    if(timer_channel_2 <= current_time)PORTD &= B11011111;                
-    if(timer_channel_3 <= current_time)PORTD &= B10111111;                
-    if(timer_channel_4 <= current_time)PORTD &= B01111111;                
-  }
+  // Remove all PORTD and timer_channel code
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -446,14 +486,16 @@ void calibrate_gyro(int samples, int motor_speed) {
     // Run motors at the specified speed (props OFF for safety!)
     if (motor_speed > 0) {
       esc_1 = esc_2 = esc_3 = esc_4 = motor_speed;
-      PORTD |= B11110000;
-      delayMicroseconds(motor_speed);
-      PORTD &= B00001111;
+      esc1.writeMicroseconds(esc_1);
+      esc2.writeMicroseconds(esc_2);
+      esc3.writeMicroseconds(esc_3);
+      esc4.writeMicroseconds(esc_4);
     } else {
       // Just send a short pulse to keep ESCs quiet
-      PORTD |= B11110000;
-      delayMicroseconds(1000);
-      PORTD &= B00001111;
+      esc1.writeMicroseconds(1000);
+      esc2.writeMicroseconds(1000);
+      esc3.writeMicroseconds(1000);
+      esc4.writeMicroseconds(1000);
     }
     delay(3);
   }
