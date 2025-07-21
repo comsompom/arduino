@@ -24,11 +24,15 @@ void loop() {
       if (gps.location.isValid()) {
         Serial.print("Latitude : ");
         lcd.setCursor(0,0);
-        lcd.print("Lat: " + gps.location.lat() + " ");
+        lcd.print("Lat: ");
+        lcd.print(gps.location.lat(), 6);
+        lcd.print("        "); // Clear rest of line if needed
         Serial.println(gps.location.lat(), 6); // 6 decimal places for precision
         Serial.print("Longitude: ");
-        lcd.setCursor(0,0);
-        lcd.print("Lon: " + gps.location.lng() + " ");
+        lcd.setCursor(0,1);
+        lcd.print("Lon: ");
+        lcd.print(gps.location.lng(), 6);
+        lcd.print("        "); // Clear rest of line if needed
         Serial.println(gps.location.lng(), 6);
         Serial.print("Altitude : ");
         Serial.println(gps.altitude.meters(), 2);
