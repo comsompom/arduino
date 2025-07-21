@@ -1,13 +1,17 @@
 #include <SoftwareSerial.h>
 #include <TinyGPS++.h>
+#include <LiquidCrystal_I2C.h>
 
 // For NEO-6M, typical baud rate is 9600.
 // If using software serial (e.g., not on hardware RX/TX pins 0,1):
 SoftwareSerial gpsSerial(4, 3); // RX, TX (connect GPS TX to Arduino pin 4, GPS RX to Arduino pin 3)
+LiquidCrystal_I2C lcd(0x27,20,4); // green SCL, blue SDA
 
 TinyGPSPlus gps; // The TinyGPS++ object
 
 void setup() {
+  lcd.init();
+  lcd.backlight();
   Serial.begin(9600);    // Serial monitor baud rate
   gpsSerial.begin(9600); // GPS module baud rate
   Serial.println("Waiting for GPS data...");
@@ -19,8 +23,12 @@ void loop() {
       // A complete NMEA sentence has been processed
       if (gps.location.isValid()) {
         Serial.print("Latitude : ");
+        lcd.setCursor(0,0);
+        lcd.print("Lat: " + gps.location.lat() + " ");
         Serial.println(gps.location.lat(), 6); // 6 decimal places for precision
         Serial.print("Longitude: ");
+        lcd.setCursor(0,0);
+        lcd.print("Lon: " + gps.location.lng() + " ");
         Serial.println(gps.location.lng(), 6);
         Serial.print("Altitude : ");
         Serial.println(gps.altitude.meters(), 2);
@@ -45,6 +53,10 @@ void loop() {
         Serial.println();
       } else {
         Serial.println("No GPS fix available.");
+        lcd.setCursor(0,0);
+        lcd.print("No GPS fix available.");
+        lcd.setCursor(0,1);
+        lcd.print("                     ");
       }
     }
   }
