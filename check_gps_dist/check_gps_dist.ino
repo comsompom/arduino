@@ -19,7 +19,7 @@ enum State {
 State currentState = WAITING_FOR_GPS;
 unsigned long countdownStartTime = 0;
 unsigned long lastUpdateTime = 0;
-const unsigned long COUNTDOWN_DURATION = 10000; // 30 seconds in milliseconds
+const unsigned long COUNTDOWN_DURATION = 10000; // 10 seconds in milliseconds
 const unsigned long UPDATE_INTERVAL = 1000; // Update every second
 
 // Reference coordinates (to be set after countdown)
@@ -178,11 +178,8 @@ void updateTracking() {
     gps.location.lat(), gps.location.lng()
   );
   
-  // Calculate altitude difference (check if altitude is valid)
-  double altitudeDiff = 0;
-  if (gps.altitude.isValid()) {
-    altitudeDiff = gps.altitude.meters() - refAltitude;
-  }
+  // Get number of satellites
+  int satellites = gps.satellites.value();
   
   // Display distance on first line
   lcd.setCursor(0,0);
@@ -195,18 +192,15 @@ void updateTracking() {
     lcd.print("km   ");
   }
   
-  // Display altitude difference on second line
+  // Display number of satellites on second line
   lcd.setCursor(0,1);
-  lcd.print("Alt: ");
-  if (altitudeDiff >= 0) {
-    lcd.print("+");
-  }
-  lcd.print(altitudeDiff, 1);
-  lcd.print("m    ");
+  lcd.print("Sat: ");
+  lcd.print(satellites);
+  lcd.print("    ");
   
   // Also output to serial for debugging
   Serial.print("Distance: "); Serial.print(distance, 1); Serial.println("m");
-  Serial.print("Altitude diff: "); Serial.print(altitudeDiff, 1); Serial.println("m");
+  Serial.print("Satellites: "); Serial.println(satellites);
 }
 
 void clearLCDLine(int line) {
