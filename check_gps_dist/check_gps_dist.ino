@@ -77,8 +77,6 @@ void handleGPSFix() {
       break;
       
     case COUNTDOWN:
-      // Countdown is handled by updateCountdown() in handleStateUpdates()
-      // No need to call it here to avoid double updates
       break;
       
     case TRACKING:
