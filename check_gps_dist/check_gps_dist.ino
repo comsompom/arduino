@@ -77,8 +77,8 @@ void handleGPSFix() {
       break;
       
     case COUNTDOWN:
-      // Update countdown display
-      updateCountdown();
+      // Countdown is handled by updateCountdown() in handleStateUpdates()
+      // No need to call it here to avoid double updates
       break;
       
     case TRACKING:
@@ -116,6 +116,9 @@ void handleStateUpdates() {
       case TRACKING:
         updateTracking();
         break;
+      case WAITING_FOR_GPS:
+        // No updates needed in waiting state
+        break;
     }
   }
 }
@@ -148,9 +151,14 @@ void updateCountdown() {
       Serial.print("Lon: "); Serial.println(refLongitude, 6);
       Serial.print("Alt: "); Serial.println(refAltitude, 2);
     } else {
-      // GPS data not valid, restart countdown
-      countdownStartTime = currentTime;
-      Serial.println("GPS data invalid, restarting countdown...");
+      // GPS data not valid, go back to waiting state
+      currentState = WAITING_FOR_GPS;
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("GPS signal lost");
+      lcd.setCursor(0,1);
+      lcd.print("Waiting for fix...");
+      Serial.println("GPS data invalid, returning to waiting state...");
     }
   } else {
     // Update countdown display
