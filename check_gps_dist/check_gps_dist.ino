@@ -28,6 +28,14 @@ double refLongitude = 0;
 double refAltitude = 0;
 bool referenceSet = false;
 
+// Function declarations
+void handleGPSFix();
+void handleNoGPSFix();
+void handleStateUpdates();
+void updateCountdown();
+void updateTracking();
+void clearLCDLine(int line);
+
 void setup() {
   lcd.init();
   lcd.backlight();
@@ -37,8 +45,7 @@ void setup() {
   
   lcd.setCursor(0,0);
   lcd.print("Waiting for GPS...");
-  lcd.setCursor(0,1);
-  lcd.print("                    ");
+  clearLCDLine(1);
 }
 
 void loop() {
@@ -85,14 +92,18 @@ void handleNoGPSFix() {
   if (currentState == WAITING_FOR_GPS) {
     lcd.setCursor(0,0);
     lcd.print("Waiting for GPS...");
-    lcd.setCursor(0,1);
-    lcd.print("                    ");
+    clearLCDLine(1);
   }
   // In other states, we keep the current display
 }
 
 void handleStateUpdates() {
   unsigned long currentTime = millis();
+  
+  // Handle millisecond overflow
+  if (currentTime < lastUpdateTime) {
+    lastUpdateTime = 0; // Reset on overflow
+  }
   
   // Only update at regular intervals to avoid flickering
   if (currentTime - lastUpdateTime >= UPDATE_INTERVAL) {
@@ -110,22 +121,37 @@ void handleStateUpdates() {
 }
 
 void updateCountdown() {
-  unsigned long elapsed = millis() - countdownStartTime;
+  unsigned long currentTime = millis();
+  unsigned long elapsed;
+  
+  // Handle millisecond overflow
+  if (currentTime < countdownStartTime) {
+    elapsed = (0xFFFFFFFF - countdownStartTime) + currentTime;
+  } else {
+    elapsed = currentTime - countdownStartTime;
+  }
+  
   unsigned long remaining = COUNTDOWN_DURATION - elapsed;
   
-  if (remaining <= 0) {
+  if (remaining <= 0 || elapsed >= COUNTDOWN_DURATION) {
     // Countdown finished, set reference coordinates
-    refLatitude = gps.location.lat();
-    refLongitude = gps.location.lng();
-    refAltitude = gps.altitude.meters();
-    referenceSet = true;
-    currentState = TRACKING;
-    
-    lcd.clear();
-    Serial.println("Countdown finished! Reference coordinates set:");
-    Serial.print("Lat: "); Serial.println(refLatitude, 6);
-    Serial.print("Lon: "); Serial.println(refLongitude, 6);
-    Serial.print("Alt: "); Serial.println(refAltitude, 2);
+    if (gps.location.isValid() && gps.altitude.isValid()) {
+      refLatitude = gps.location.lat();
+      refLongitude = gps.location.lng();
+      refAltitude = gps.altitude.meters();
+      referenceSet = true;
+      currentState = TRACKING;
+      
+      lcd.clear();
+      Serial.println("Countdown finished! Reference coordinates set:");
+      Serial.print("Lat: "); Serial.println(refLatitude, 6);
+      Serial.print("Lon: "); Serial.println(refLongitude, 6);
+      Serial.print("Alt: "); Serial.println(refAltitude, 2);
+    } else {
+      // GPS data not valid, restart countdown
+      countdownStartTime = currentTime;
+      Serial.println("GPS data invalid, restarting countdown...");
+    }
   } else {
     // Update countdown display
     unsigned long seconds = remaining / 1000;
@@ -138,7 +164,7 @@ void updateCountdown() {
 }
 
 void updateTracking() {
-  if (!referenceSet) return;
+  if (!referenceSet || !gps.location.isValid()) return;
   
   // Calculate distance from reference point
   double distance = TinyGPSPlus::distanceBetween(
@@ -146,8 +172,11 @@ void updateTracking() {
     gps.location.lat(), gps.location.lng()
   );
   
-  // Calculate altitude difference
-  double altitudeDiff = gps.altitude.meters() - refAltitude;
+  // Calculate altitude difference (check if altitude is valid)
+  double altitudeDiff = 0;
+  if (gps.altitude.isValid()) {
+    altitudeDiff = gps.altitude.meters() - refAltitude;
+  }
   
   // Display distance on first line
   lcd.setCursor(0,0);
@@ -172,4 +201,9 @@ void updateTracking() {
   // Also output to serial for debugging
   Serial.print("Distance: "); Serial.print(distance, 1); Serial.println("m");
   Serial.print("Altitude diff: "); Serial.print(altitudeDiff, 1); Serial.println("m");
+}
+
+void clearLCDLine(int line) {
+  lcd.setCursor(0, line);
+  lcd.print("                    "); // 20 spaces for 20x4 LCD
 }
