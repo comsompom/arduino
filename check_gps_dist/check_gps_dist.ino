@@ -19,7 +19,7 @@ enum State {
 State currentState = WAITING_FOR_GPS;
 unsigned long countdownStartTime = 0;
 unsigned long lastUpdateTime = 0;
-const unsigned long COUNTDOWN_DURATION = 30000; // 30 seconds in milliseconds
+const unsigned long COUNTDOWN_DURATION = 10000; // 30 seconds in milliseconds
 const unsigned long UPDATE_INTERVAL = 1000; // Update every second
 
 // Reference coordinates (to be set after countdown)
