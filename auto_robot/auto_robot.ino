@@ -44,7 +44,7 @@ const int GND_TRIG_PIN = 32;
 const int GND_ECHO_PIN = 33;
 
 // Buzzer Pin
-const int BUZZER_PIN = 22;
+const int BUZZER_PIN = A3; // Changed from digital pin 22 to analog pin 3
 
 //======================================================================
 // CONSTANTS & CALIBRATION
@@ -96,7 +96,7 @@ void setup() {
   printMotorShieldInfo();
   
   // Initial buzzer beep
-  beepBuzzer(1);
+  beep(1, 250);
   delay(1000);
   
   // Initialize and calibrate GY-65 (BMP180)
@@ -104,7 +104,7 @@ void setup() {
   if (!initializeBMP180()) {
     Serial.println("Could not find GY-65 (BMP180). Halting.");
     while (1) {
-      beepBuzzer(3);
+      beep(3, 500);
       delay(2000);
     }
   }
@@ -114,7 +114,7 @@ void setup() {
   if (!initializeMPU6050()) {
     Serial.println("Could not find MPU6050 (Gyro). Halting.");
     while (1) {
-      beepBuzzer(3);
+      beep(3, 500);
       delay(2000);
     }
   }
@@ -124,7 +124,7 @@ void setup() {
   calibrateDistance();
   
   // Setup completion buzzer beeps
-  beepBuzzer(2);
+  beep(2, 100);
   
   Serial.println("Setup complete. Robot ready to move!");
   delay(2000);
