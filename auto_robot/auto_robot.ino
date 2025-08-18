@@ -12,10 +12,10 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
 // Select which shield connections to use for the motors
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);  // M1
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(3); // M4
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(3); // M3
 
-// MPU6050 I2C address
-#define MPU6050_ADDR 0x68
+// GY-65 (BMP180) I2C address
+#define BMP180_ADDR 0x77
 
 // Sonar Pins
 const int FWD_TRIG_PIN = 30;
@@ -42,13 +42,9 @@ const int TURN_SPEED = 130;
 const int OBSTACLE_THRESHOLD_CM = 20; // If something is closer than this, it's an obstacle.
 const int CLIFF_THRESHOLD_CM = 15;    // If the ground is further than this, it's a cliff/drop.
 
-// Gyro calibration
-const int GYRO_CALIBRATION_SAMPLES = 200;
-int16_t gyro_z_offset = 0;
-
-// Gyro turning variables
-float yawAngle = 0;
-unsigned long prevTime = 0;
+// Distance measurement variables
+float initialDistance = 0;
+float currentDistance = 0;
 
 //======================================================================
 // SETUP FUNCTION - Runs once at the beginning
@@ -74,15 +70,15 @@ void setup() {
   pinMode(GND_TRIG_PIN, OUTPUT);
   pinMode(GND_ECHO_PIN, INPUT);
 
-  // --- Gyroscope Setup & Calibration ---
+  // --- GY-65 (BMP180) Setup & Calibration ---
   Wire.begin();
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(0x6B); // PWR_MGMT_1 register
-  Wire.write(0);    // Wake up the MPU6050
-  Wire.endTransmission(true);
-  Serial.println("MPU6050 connection successful");
+  if (!initializeBMP180()) {
+    Serial.println("Could not find GY-65 (BMP180). Halting.");
+    while (1);
+  }
+  Serial.println("GY-65 (BMP180) connection successful");
   
-  calibrateGyro();
+  calibrateDistance();
 
   // --- Post-setup Beeps ---
   beep(2, 100); // Beep twice to indicate setup is complete
@@ -90,7 +86,6 @@ void setup() {
   Serial.println("\nSetup complete. Ready to move.");
   delay(1000); // Wait a moment before starting the main sequence
 }
-
 
 //======================================================================
 // MAIN LOOP - Contains the robot's movement sequence
@@ -101,13 +96,13 @@ void loop() {
   moveForwardWithObstacleCheck(200); // 200 cm = 2 meters
 
   Serial.println("Step 2: Turning right 90 degrees...");
-  turnRightWithGyro(90);
+  turnRight(90);
 
   Serial.println("Step 3: Moving forward 50 cm...");
   moveForwardWithObstacleCheck(50);
 
   Serial.println("Step 4: Turning right 90 degrees...");
-  turnRightWithGyro(90);
+  turnRight(90);
   
   Serial.println("Step 5: Moving forward 2 meters...");
   moveForwardWithObstacleCheck(200);
@@ -134,12 +129,21 @@ void moveForwardWithObstacleCheck(float distanceCm) {
   
   while (millis() - startTime < durationMillis) {
     if (checkForObstacles()) {
-      Serial.println("Obstacle detected! Halting this movement step.");
+      Serial.println("Obstacle detected! Attempting to avoid...");
       stopMotors();
-      // Here you can decide what to do. For now, we just stop this part of the sequence.
-      // You could call an avoidance routine here instead.
-      // avoidObstacle();
-      return; // Exit the function
+      if (avoidObstacle()) {
+        Serial.println("Obstacle avoided, continuing...");
+        // Recalculate remaining time and continue
+        unsigned long elapsedTime = millis() - startTime;
+        long remainingTime = durationMillis - elapsedTime;
+        if (remainingTime > 0) {
+          startTime = millis() - remainingTime;
+          continue;
+        }
+      } else {
+        Serial.println("Could not avoid obstacle. Stopping movement.");
+        return; // Exit the function
+      }
     }
     
     // If no obstacle, keep moving forward
@@ -152,45 +156,73 @@ void moveForwardWithObstacleCheck(float distanceCm) {
 }
 
 /**
- * Turns the robot right by a specified angle using the gyroscope.
+ * Turns the robot right by a specified angle using time-based turning.
  * @param targetAngle The angle in degrees to turn.
  */
-void turnRightWithGyro(float targetAngle) {
-  yawAngle = 0; // Reset angle
-  prevTime = micros();
+void turnRight(float targetAngle) {
+  // Calculate turn time based on angle (empirical calibration needed)
+  // Assuming 90 degrees takes about 1.5 seconds at TURN_SPEED
+  float turnTimeSeconds = (targetAngle / 90.0) * 1.5;
+  long turnTimeMillis = turnTimeSeconds * 1000;
   
   // Start turning: right motor backward, left motor forward
   setMotorSpeed(TURN_SPEED, -TURN_SPEED);
-
-  while (abs(yawAngle) < targetAngle * 0.95) { // Stop slightly short to account for momentum
-    unsigned long currentTime = micros();
-    float dt = (currentTime - prevTime) / 1000000.0; // Delta time in seconds
-    prevTime = currentTime;
-
-    int16_t gx, gy, gz, ax, ay, az;
-    Wire.beginTransmission(MPU6050_ADDR);
-    Wire.write(0x3B); // Starting with register 0x3B (ACCEL_XOUT_H)
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU6050_ADDR, 14, true); // Read 14 registers
-    ax = Wire.read() << 8 | Wire.read();
-    ay = Wire.read() << 8 | Wire.read();
-    az = Wire.read() << 8 | Wire.read();
-    gx = Wire.read() << 8 | Wire.read();
-    gy = Wire.read() << 8 | Wire.read();
-    gz = Wire.read() << 8 | Wire.read();
-    
-    // Use the calibrated Z-axis gyro data
-    float gyroZ = (gz - gyro_z_offset) / 131.0; // Convert to degrees per second
-
-    // Integrate to get angle
-    yawAngle += gyroZ * dt;
-
-    // Optional: Print angle for debugging
-    // Serial.print("Current Angle: ");
-    // Serial.println(yawAngle);
-  }
+  
+  delay(turnTimeMillis);
+  
   stopMotors();
   delay(200); // Pause after turn
+}
+
+/**
+ * Attempts to avoid obstacles by turning left or right.
+ * @return True if avoidance was successful, false otherwise.
+ */
+bool avoidObstacle() {
+  // Check which side has more space
+  long leftDistance = checkLeftSide();
+  long rightDistance = checkRightSide();
+  
+  Serial.print("Left distance: "); Serial.print(leftDistance); Serial.println(" cm");
+  Serial.print("Right distance: "); Serial.print(rightDistance); Serial.println(" cm");
+  
+  if (leftDistance > rightDistance && leftDistance > OBSTACLE_THRESHOLD_CM) {
+    // Turn left to avoid
+    Serial.println("Turning left to avoid obstacle...");
+    setMotorSpeed(-TURN_SPEED, TURN_SPEED);
+    delay(1000); // Turn for 1 second
+    stopMotors();
+    return true;
+  } else if (rightDistance > OBSTACLE_THRESHOLD_CM) {
+    // Turn right to avoid
+    Serial.println("Turning right to avoid obstacle...");
+    setMotorSpeed(TURN_SPEED, -TURN_SPEED);
+    delay(1000); // Turn for 1 second
+    stopMotors();
+    return true;
+  }
+  
+  return false; // No clear path found
+}
+
+/**
+ * Checks the left side distance using the forward sonar.
+ * @return Distance in centimeters.
+ */
+long checkLeftSide() {
+  // For simplicity, using the forward sonar
+  // In a real implementation, you might have a dedicated left sonar
+  return readSonar(FWD_TRIG_PIN, FWD_ECHO_PIN);
+}
+
+/**
+ * Checks the right side distance using the forward sonar.
+ * @return Distance in centimeters.
+ */
+long checkRightSide() {
+  // For simplicity, using the forward sonar
+  // In a real implementation, you might have a dedicated right sonar
+  return readSonar(FWD_TRIG_PIN, FWD_ECHO_PIN);
 }
 
 /**
@@ -234,36 +266,118 @@ bool checkForObstacles() {
   return false;
 }
 
+//======================================================================
+// GY-65 (BMP180) FUNCTIONS
+//======================================================================
+
+/**
+ * Initializes the BMP180 sensor.
+ * @return True if successful, false otherwise.
+ */
+bool initializeBMP180() {
+  Wire.beginTransmission(BMP180_ADDR);
+  Wire.write(0xD0); // Chip ID register
+  Wire.endTransmission(false);
+  Wire.requestFrom(BMP180_ADDR, 1, true);
+  
+  if (Wire.available()) {
+    byte chipId = Wire.read();
+    if (chipId == 0x55) { // BMP180 chip ID
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Reads temperature from BMP180.
+ * @return Temperature in degrees Celsius.
+ */
+float readTemperature() {
+  Wire.beginTransmission(BMP180_ADDR);
+  Wire.write(0xF4); // Control register
+  Wire.write(0x2E); // Start temperature measurement
+  Wire.endTransmission();
+  delay(5); // Wait for measurement
+  
+  Wire.beginTransmission(BMP180_ADDR);
+  Wire.write(0xF6); // Data register
+  Wire.endTransmission(false);
+  Wire.requestFrom(BMP180_ADDR, 2, true);
+  
+  int rawTemp = Wire.read() << 8 | Wire.read();
+  float temp = (float)rawTemp / 10.0;
+  return temp;
+}
+
+/**
+ * Reads pressure from BMP180.
+ * @return Pressure in Pa.
+ */
+long readPressure() {
+  Wire.beginTransmission(BMP180_ADDR);
+  Wire.write(0xF4); // Control register
+  Wire.write(0x34); // Start pressure measurement
+  Wire.endTransmission();
+  delay(26); // Wait for measurement
+  
+  Wire.beginTransmission(BMP180_ADDR);
+  Wire.write(0xF6); // Data register
+  Wire.endTransmission(false);
+  Wire.requestFrom(BMP180_ADDR, 3, true);
+  
+  long pressure = Wire.read() << 16 | Wire.read() << 8 | Wire.read();
+  pressure >>= 8;
+  return pressure;
+}
+
+/**
+ * Calculates altitude from pressure.
+ * @param pressure Pressure in Pa.
+ * @return Altitude in meters.
+ */
+float calculateAltitude(long pressure) {
+  float altitude = 44330 * (1 - pow(pressure / 101325.0, 0.1903));
+  return altitude;
+}
+
+/**
+ * Calibrates the distance measurement using the GY-65.
+ */
+void calibrateDistance() {
+  Serial.println("Calibrating distance measurement with GY-65...");
+  
+  // Take multiple readings and average them
+  float totalAltitude = 0;
+  const int samples = 10;
+  
+  for (int i = 0; i < samples; i++) {
+    long pressure = readPressure();
+    float altitude = calculateAltitude(pressure);
+    totalAltitude += altitude;
+    delay(100);
+  }
+  
+  initialDistance = totalAltitude / samples;
+  currentDistance = initialDistance;
+  
+  Serial.print("Initial distance calibrated: ");
+  Serial.print(initialDistance);
+  Serial.println(" meters");
+}
+
+/**
+ * Updates the current distance measurement.
+ */
+void updateDistance() {
+  long pressure = readPressure();
+  float altitude = calculateAltitude(pressure);
+  currentDistance = altitude;
+}
 
 //======================================================================
 // UTILITY & HELPER FUNCTIONS
 //======================================================================
-
-/**
- * Calibrates the gyroscope by taking multiple readings and finding the average offset.
- */
-void calibrateGyro() {
-  Serial.println("Calibrating Gyroscope. Keep the robot stationary...");
-  long z_total = 0;
-  for (int i = 0; i < GYRO_CALIBRATION_SAMPLES; i++) {
-    int16_t gx, gy, gz, ax, ay, az;
-    Wire.beginTransmission(MPU6050_ADDR);
-    Wire.write(0x3B); // Starting with register 0x3B (ACCEL_XOUT_H)
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU6050_ADDR, 14, true); // Read 14 registers
-    ax = Wire.read() << 8 | Wire.read();
-    ay = Wire.read() << 8 | Wire.read();
-    az = Wire.read() << 8 | Wire.read();
-    gx = Wire.read() << 8 | Wire.read();
-    gy = Wire.read() << 8 | Wire.read();
-    gz = Wire.read() << 8 | Wire.read();
-    z_total += gz;
-    delay(5);
-  }
-  gyro_z_offset = z_total / GYRO_CALIBRATION_SAMPLES;
-  Serial.print("Gyro Z-axis offset calculated: ");
-  Serial.println(gyro_z_offset);
-}
 
 /**
  * Controls both motors at a given speed.
