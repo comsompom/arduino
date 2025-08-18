@@ -16,7 +16,8 @@ const int RIGHT_MOTOR_IN4 = 5;  // Right motor direction 2
 const int RIGHT_MOTOR_ENB = 10; // Right motor speed control (PWM)
 
 // GY-65 (BMP180) I2C address
-#define BMP180_ADDR 0x77
+#define BMP180_ADDR_DEFAULT 0x77
+byte BMP180_ADDR = BMP180_ADDR_DEFAULT; // Will be updated during initialization
 
 // Sonar Pins
 const int FWD_TRIG_PIN = 30;
@@ -332,8 +333,7 @@ bool initializeBMP180() {
         Serial.print("BMP180 found at address 0x");
         Serial.println(addr, HEX);
         // Update the global address
-        #undef BMP180_ADDR
-        #define BMP180_ADDR addr
+        BMP180_ADDR = addr;
         return true;
       } else {
         Serial.print("Wrong chip ID: 0x");
