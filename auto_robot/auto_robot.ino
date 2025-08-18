@@ -9,24 +9,24 @@
 // PIN & OBJECT DEFINITIONS
 //======================================================================
 // Motor control using AFMotor library with stepper motors (working solution)
-AF_Stepper leftMotor(200, 1);  // 200 steps per revolution, motor 1
-AF_Stepper rightMotor(200, 2); // 200 steps per revolution, motor 2
+AF_Stepper motor1(200, 1);  // Left motor
+AF_Stepper motor2(200, 2);  // Right motor
 
-// Stepper motor control functions
+// Stepper motor control functions - exactly like test_motor.ino
 void leftForwardStep() {  
-  leftMotor.onestep(FORWARD, DOUBLE);
+  motor1.onestep(FORWARD, SINGLE);
 }
 void leftBackwardStep() {  
-  leftMotor.onestep(BACKWARD, DOUBLE);
+  motor1.onestep(BACKWARD, SINGLE);
 }
 void rightForwardStep() {  
-  rightMotor.onestep(FORWARD, DOUBLE);
+  motor2.onestep(FORWARD, SINGLE);
 }
 void rightBackwardStep() {  
-  rightMotor.onestep(BACKWARD, DOUBLE);
+  motor2.onestep(BACKWARD, SINGLE);
 }
 
-// Create AccelStepper objects
+// Create AccelStepper objects - exactly like test_motor.ino
 AccelStepper leftStepper(leftForwardStep, leftBackwardStep);
 AccelStepper rightStepper(rightForwardStep, rightBackwardStep);
 
@@ -90,6 +90,9 @@ void setup() {
   leftStepper.setSpeed(50);
   rightStepper.setSpeed(50);
   Serial.println("Stepper motors initialized.");
+  
+  // Test motor power
+  testMotorPower();
   
   // Print motor shield information
   printMotorShieldInfo();
@@ -588,51 +591,95 @@ bool checkI2CConnection() {
 }
 
 /**
+ * Tests motor power with different stepping modes.
+ */
+void testMotorPower() {
+  Serial.println("\n=== MOTOR POWER TEST ===");
+  Serial.println("Testing different stepping modes and speeds...");
+  
+  // Test with SINGLE stepping mode
+  Serial.println("Testing SINGLE stepping mode...");
+  motor1.onestep(FORWARD, SINGLE);
+  delay(100);
+  motor1.onestep(FORWARD, SINGLE);
+  delay(100);
+  motor1.onestep(FORWARD, SINGLE);
+  delay(100);
+  
+  // Test with DOUBLE stepping mode
+  Serial.println("Testing DOUBLE stepping mode...");
+  motor1.onestep(FORWARD, DOUBLE);
+  delay(100);
+  motor1.onestep(FORWARD, DOUBLE);
+  delay(100);
+  motor1.onestep(FORWARD, DOUBLE);
+  delay(100);
+  
+  // Test with INTERLEAVE stepping mode
+  Serial.println("Testing INTERLEAVE stepping mode...");
+  motor1.onestep(FORWARD, INTERLEAVE);
+  delay(100);
+  motor1.onestep(FORWARD, INTERLEAVE);
+  delay(100);
+  motor1.onestep(FORWARD, INTERLEAVE);
+  delay(100);
+  
+  // Test with MICROSTEP stepping mode
+  Serial.println("Testing MICROSTEP stepping mode...");
+  motor1.onestep(FORWARD, MICROSTEP);
+  delay(100);
+  motor1.onestep(FORWARD, MICROSTEP);
+  delay(100);
+  motor1.onestep(FORWARD, MICROSTEP);
+  delay(100);
+  
+  Serial.println("Motor power test complete.");
+  Serial.println("Check which stepping mode made the motor move.");
+}
+
+/**
  * Manual motor test function - call this from setup() to test motors manually.
  * Comment out the automatic test and uncomment this line in setup():
  * manualMotorTest();
  */
 void manualMotorTest() {
   Serial.println("\n=== MANUAL MOTOR TEST ===");
-  Serial.println("Testing basic motor functionality...");
+  Serial.println("Testing motors exactly like test_motor.ino...");
   
-  // Test forward movement
-  Serial.println("Testing forward movement...");
+  // Test left motor (motor1) - exactly like test_motor.ino
+  Serial.println("Testing left motor (motor1)...");
   leftStepper.setSpeed(50);
-  rightStepper.setSpeed(50);
   unsigned long startTime = millis();
   while (millis() - startTime < 3000) {
     leftStepper.runSpeed();
+    delay(20);
+  }
+  leftStepper.setSpeed(0);
+  delay(1000);
+  
+  // Test right motor (motor2) - exactly like test_motor.ino
+  Serial.println("Testing right motor (motor2)...");
+  rightStepper.setSpeed(50);
+  startTime = millis();
+  while (millis() - startTime < 3000) {
     rightStepper.runSpeed();
     delay(20);
   }
-  stopMotors();
+  rightStepper.setSpeed(0);
   delay(1000);
   
-  // Test backward movement
-  Serial.println("Testing backward movement...");
-  leftStepper.setSpeed(-50);
-  rightStepper.setSpeed(-50);
+  // Test both motors together
+  Serial.println("Testing both motors together...");
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(50);
   startTime = millis();
   while (millis() - startTime < 3000) {
     leftStepper.runSpeed();
     rightStepper.runSpeed();
     delay(20);
   }
-  stopMotors();
-  delay(1000);
-  
-  // Test turn right
-  Serial.println("Testing turn right...");
-  leftStepper.setSpeed(50);
-  rightStepper.setSpeed(-50);
-  startTime = millis();
-  while (millis() - startTime < 2000) {
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  stopMotors();
+  leftStepper.setSpeed(0);
+  rightStepper.setSpeed(0);
   delay(1000);
   
   Serial.println("Manual motor test complete.");
@@ -664,58 +711,28 @@ void printMotorShieldInfo() {
 void identifyMotorShield() {
   Serial.println("\n=== MOTOR SHIELD IDENTIFICATION ===");
   Serial.println("Using AFMotor library with stepper motors.");
-  Serial.println("Testing motor movements...");
+  Serial.println("Testing motors one at a time...");
   
-  // Test forward movement
-  Serial.println("Testing forward movement...");
+  // Test left motor only
+  Serial.println("Testing left motor only...");
   leftStepper.setSpeed(50);
-  rightStepper.setSpeed(50);
   unsigned long startTime = millis();
   while (millis() - startTime < 2000) {
     leftStepper.runSpeed();
-    rightStepper.runSpeed();
     delay(20);
   }
-  stopMotors();
+  leftStepper.setSpeed(0);
   delay(1000);
   
-  // Test backward movement
-  Serial.println("Testing backward movement...");
-  leftStepper.setSpeed(-50);
-  rightStepper.setSpeed(-50);
-  startTime = millis();
-  while (millis() - startTime < 2000) {
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  stopMotors();
-  delay(1000);
-  
-  // Test turn right
-  Serial.println("Testing turn right...");
-  leftStepper.setSpeed(50);
-  rightStepper.setSpeed(-50);
-  startTime = millis();
-  while (millis() - startTime < 1000) {
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  stopMotors();
-  delay(1000);
-  
-  // Test turn left
-  Serial.println("Testing turn left...");
-  leftStepper.setSpeed(-50);
+  // Test right motor only
+  Serial.println("Testing right motor only...");
   rightStepper.setSpeed(50);
   startTime = millis();
-  while (millis() - startTime < 1000) {
-    leftStepper.runSpeed();
+  while (millis() - startTime < 2000) {
     rightStepper.runSpeed();
     delay(20);
   }
-  stopMotors();
+  rightStepper.setSpeed(0);
   delay(1000);
   
   Serial.println("=== MOTOR SHIELD IDENTIFICATION COMPLETE ===");
