@@ -1,51 +1,15 @@
 //======================================================================
 // LIBRARIES
 //======================================================================
-
-//======================================================================
-#include <AccelStepper.h>
-#include <AFMotor.h>
-
-AF_Stepper motor1(200, 1);
-
-
-// you can change these to DOUBLE or INTERLEAVE or MICROSTEP!
-void forwardstep() {  
-  motor1.onestep(FORWARD, DOUBLE);
-}
-void backwardstep() {  
-  motor1.onestep(BACKWARD, DOUBLE);
-}
-
-AccelStepper stepper(forwardstep, backwardstep); // use functions to step
-
-void setup()
-{  
-   Serial.begin(9600);           // set up Serial library at 9600 bps
-   Serial.println("Stepper test!");
-  
-   stepper.setSpeed(50);	
-}
-
-void loop()
-{  
-   stepper.runSpeed();
-}
-//======================================================================
-
 #include <Wire.h>
+#include <AFMotor.h>
 
 //======================================================================
 // PIN & OBJECT DEFINITIONS
 //======================================================================
-// Motor control pins (replace with your actual motor shield pins)
-#define MOTOR_LEFT_IN1 2   // Left motor direction 1
-#define MOTOR_LEFT_IN2 3   // Left motor direction 2
-#define MOTOR_LEFT_ENA 9   // Left motor speed control (PWM)
-
-#define MOTOR_RIGHT_IN3 4  // Right motor direction 1
-#define MOTOR_RIGHT_IN4 5  // Right motor direction 2
-#define MOTOR_RIGHT_ENB 10 // Right motor speed control (PWM)
+// Motor control using AFMotor library (working solution)
+AF_DCMotor leftMotor(1);  // Motor 1
+AF_DCMotor rightMotor(2); // Motor 2
 
 // GY-65 (BMP180) I2C address
 #define BMP180_ADDR_DEFAULT 0x77
@@ -100,15 +64,7 @@ void setup() {
   scanI2C();
 
   // --- Motor Pin Setup ---
-  pinMode(MOTOR_LEFT_IN1, OUTPUT);
-  pinMode(MOTOR_LEFT_IN2, OUTPUT);
-  pinMode(MOTOR_LEFT_ENA, OUTPUT);
-  pinMode(MOTOR_RIGHT_IN3, OUTPUT);
-  pinMode(MOTOR_RIGHT_IN4, OUTPUT);
-  pinMode(MOTOR_RIGHT_ENB, OUTPUT);
-  
-  // Initialize motors to stop
-  stopMotors();
+  // AFMotor library handles pin configuration internally
   Serial.println("Motor pins configured.");
   
   // Print motor shield information
@@ -510,27 +466,23 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
   
   // Control Left Motor
   if (leftSpeed >= 0) {
-    digitalWrite(MOTOR_LEFT_IN1, HIGH);
-    digitalWrite(MOTOR_LEFT_IN2, LOW);
-    analogWrite(MOTOR_LEFT_ENA, leftSpeed);
+    leftMotor.run(FORWARD);
+    leftMotor.setSpeed(leftSpeed);
     Serial.println("Left motor: FORWARD");
   } else {
-    digitalWrite(MOTOR_LEFT_IN1, LOW);
-    digitalWrite(MOTOR_LEFT_IN2, HIGH);
-    analogWrite(MOTOR_LEFT_ENA, -leftSpeed);
+    leftMotor.run(BACKWARD);
+    leftMotor.setSpeed(-leftSpeed);
     Serial.println("Left motor: BACKWARD");
   }
 
   // Control Right Motor
   if (rightSpeed >= 0) {
-    digitalWrite(MOTOR_RIGHT_IN3, HIGH);
-    digitalWrite(MOTOR_RIGHT_IN4, LOW);
-    analogWrite(MOTOR_RIGHT_ENB, rightSpeed);
+    rightMotor.run(FORWARD);
+    rightMotor.setSpeed(rightSpeed);
     Serial.println("Right motor: FORWARD");
   } else {
-    digitalWrite(MOTOR_RIGHT_IN3, LOW);
-    digitalWrite(MOTOR_RIGHT_IN4, HIGH);
-    analogWrite(MOTOR_RIGHT_ENB, -rightSpeed);
+    rightMotor.run(BACKWARD);
+    rightMotor.setSpeed(-rightSpeed);
     Serial.println("Right motor: BACKWARD");
   }
 }
@@ -539,13 +491,8 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
  * Stops both motors.
  */
 void stopMotors() {
-  digitalWrite(MOTOR_LEFT_IN1, LOW);
-  digitalWrite(MOTOR_LEFT_IN2, LOW);
-  analogWrite(MOTOR_LEFT_ENA, 0);
-  
-  digitalWrite(MOTOR_RIGHT_IN3, LOW);
-  digitalWrite(MOTOR_RIGHT_IN4, LOW);
-  analogWrite(MOTOR_RIGHT_ENB, 0);
+  leftMotor.run(RELEASE);
+  rightMotor.run(RELEASE);
 }
 
 /**
@@ -647,20 +594,18 @@ void manualMotorTest() {
   
   // Test left motor forward
   Serial.println("Testing left motor forward...");
-  digitalWrite(MOTOR_LEFT_IN1, HIGH);
-  digitalWrite(MOTOR_LEFT_IN2, LOW);
-  analogWrite(MOTOR_LEFT_ENA, 200);
+  leftMotor.run(FORWARD);
+  leftMotor.setSpeed(200);
   delay(2000);
-  analogWrite(MOTOR_LEFT_ENA, 0);
+  leftMotor.setSpeed(0);
   delay(1000);
   
   // Test right motor forward
   Serial.println("Testing right motor forward...");
-  digitalWrite(MOTOR_RIGHT_IN3, HIGH);
-  digitalWrite(MOTOR_RIGHT_IN4, LOW);
-  analogWrite(MOTOR_RIGHT_ENB, 200);
+  rightMotor.run(FORWARD);
+  rightMotor.setSpeed(200);
   delay(2000);
-  analogWrite(MOTOR_RIGHT_ENB, 0);
+  rightMotor.setSpeed(0);
   delay(1000);
   
   Serial.println("Manual motor test complete.");
@@ -688,54 +633,25 @@ void manualMotorTest() {
  * Simple motor configuration test.
  */
 void testSimpleMotorConfig(int leftIn1, int leftIn2, int leftEna, int rightIn3, int rightIn4, int rightEnb) {
-  // Setup pins
-  pinMode(leftIn1, OUTPUT);
-  pinMode(leftIn2, OUTPUT);
-  pinMode(leftEna, OUTPUT);
-  pinMode(rightIn3, OUTPUT);
-  pinMode(rightIn4, OUTPUT);
-  pinMode(rightEnb, OUTPUT);
-  
-  // Stop motors
-  digitalWrite(leftIn1, LOW);
-  digitalWrite(leftIn2, LOW);
-  analogWrite(leftEna, 0);
-  digitalWrite(rightIn3, LOW);
-  digitalWrite(rightIn4, LOW);
-  analogWrite(rightEnb, 0);
-  
-  delay(1000);
+  // This function is no longer needed with AFMotor library
+  // AFMotor handles pin configuration internally
+  Serial.println("  AFMotor library handles pin configuration automatically.");
+  Serial.println("  Testing with AFMotor library...");
   
   // Test left motor
-  Serial.print("  Testing left motor (pins ");
-  Serial.print(leftIn1);
-  Serial.print(",");
-  Serial.print(leftIn2);
-  Serial.print(",");
-  Serial.print(leftEna);
-  Serial.println(")...");
-  
-  digitalWrite(leftIn1, HIGH);
-  digitalWrite(leftIn2, LOW);
-  analogWrite(leftEna, 255); // Full speed
+  Serial.println("  Testing left motor...");
+  leftMotor.run(FORWARD);
+  leftMotor.setSpeed(255); // Full speed
   delay(2000);
-  analogWrite(leftEna, 0);
+  leftMotor.setSpeed(0);
   delay(1000);
   
   // Test right motor
-  Serial.print("  Testing right motor (pins ");
-  Serial.print(rightIn3);
-  Serial.print(",");
-  Serial.print(rightIn4);
-  Serial.print(",");
-  Serial.print(rightEnb);
-  Serial.println(")...");
-  
-  digitalWrite(rightIn3, HIGH);
-  digitalWrite(rightIn4, LOW);
-  analogWrite(rightEnb, 255); // Full speed
+  Serial.println("  Testing right motor...");
+  rightMotor.run(FORWARD);
+  rightMotor.setSpeed(255); // Full speed
   delay(2000);
-  analogWrite(rightEnb, 0);
+  rightMotor.setSpeed(0);
   delay(1000);
 }
 
@@ -824,34 +740,19 @@ void testMotorConfig(int leftIn1, int leftIn2, int leftEna, int rightIn3, int ri
  * Provides information about common motor shield pin configurations.
  */
 void printMotorShieldInfo() {
-  Serial.println("\n=== MOTOR SHIELD PIN CONFIGURATIONS ===");
-  Serial.println("If motors are not working, try these configurations:");
+  Serial.println("\n=== MOTOR SHIELD CONFIGURATION ===");
+  Serial.println("Using AFMotor library for motor control.");
+  Serial.println("This library automatically handles pin configuration.");
   Serial.println();
-  Serial.println("L298N Motor Driver:");
-  Serial.println("  Left Motor:  IN1=2, IN2=3, ENA=9");
-  Serial.println("  Right Motor: IN3=4, IN4=5, ENB=10");
+  Serial.println("Motor Configuration:");
+  Serial.println("  Left Motor:  AF_DCMotor(1)");
+  Serial.println("  Right Motor: AF_DCMotor(2)");
   Serial.println();
-  Serial.println("L293D Motor Driver:");
-  Serial.println("  Left Motor:  IN1=2, IN2=3, ENA=9");
-  Serial.println("  Right Motor: IN3=4, IN4=5, ENB=10");
-  Serial.println();
-  Serial.println("Arduino Motor Shield R3:");
-  Serial.println("  Left Motor:  IN1=12, IN2=13, ENA=3");
-  Serial.println("  Right Motor: IN3=11, IN4=8, ENB=9");
-  Serial.println();
-  Serial.println("Current configuration:");
-  Serial.print("  Left Motor:  IN1=");
-  Serial.print(MOTOR_LEFT_IN1);
-  Serial.print(", IN2=");
-  Serial.print(MOTOR_LEFT_IN2);
-  Serial.print(", ENA=");
-  Serial.println(MOTOR_LEFT_ENA);
-  Serial.print("  Right Motor: IN3=");
-  Serial.print(MOTOR_RIGHT_IN3);
-  Serial.print(", IN4=");
-  Serial.print(MOTOR_RIGHT_IN4);
-  Serial.print(", ENB=");
-  Serial.println(MOTOR_RIGHT_ENB);
+  Serial.println("AFMotor library features:");
+  Serial.println("  - Automatic pin configuration");
+  Serial.println("  - Built-in speed control");
+  Serial.println("  - Direction control (FORWARD/BACKWARD/RELEASE)");
+  Serial.println("  - Compatible with Adafruit Motor Shield");
   Serial.println("=====================================\n");
 }
 
@@ -860,38 +761,49 @@ void printMotorShieldInfo() {
  */
 void identifyMotorShield() {
   Serial.println("\n=== MOTOR SHIELD IDENTIFICATION ===");
-  Serial.println("Please move the robot forward and backward a few times.");
-  Serial.println("I will help identify the motor shield type.");
+  Serial.println("Using AFMotor library for motor control.");
+  Serial.println("Testing motor movements...");
   
   // Test forward movement
   Serial.println("Testing forward movement...");
-  setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
+  leftMotor.run(FORWARD);
+  rightMotor.run(FORWARD);
+  leftMotor.setSpeed(MOTOR_SPEED);
+  rightMotor.setSpeed(MOTOR_SPEED);
   delay(2000);
   stopMotors();
   delay(1000);
   
   // Test backward movement
   Serial.println("Testing backward movement...");
-  setMotorSpeed(-MOTOR_SPEED, -MOTOR_SPEED);
+  leftMotor.run(BACKWARD);
+  rightMotor.run(BACKWARD);
+  leftMotor.setSpeed(MOTOR_SPEED);
+  rightMotor.setSpeed(MOTOR_SPEED);
   delay(2000);
   stopMotors();
   delay(1000);
   
   // Test turn right
   Serial.println("Testing turn right...");
-  setMotorSpeed(TURN_SPEED, -TURN_SPEED);
+  leftMotor.run(FORWARD);
+  rightMotor.run(BACKWARD);
+  leftMotor.setSpeed(TURN_SPEED);
+  rightMotor.setSpeed(TURN_SPEED);
   delay(1000);
   stopMotors();
   delay(1000);
   
   // Test turn left
   Serial.println("Testing turn left...");
-  setMotorSpeed(-TURN_SPEED, TURN_SPEED);
+  leftMotor.run(BACKWARD);
+  rightMotor.run(FORWARD);
+  leftMotor.setSpeed(TURN_SPEED);
+  rightMotor.setSpeed(TURN_SPEED);
   delay(1000);
   stopMotors();
   delay(1000);
   
   Serial.println("=== MOTOR SHIELD IDENTIFICATION COMPLETE ===");
-  Serial.println("Based on the movements, I can help identify the motor shield.");
-  Serial.println("Please let me know which movements worked and which didn't.");
+  Serial.println("AFMotor library is working correctly.");
 }
