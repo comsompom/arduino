@@ -57,23 +57,46 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   beep(1, 250); // Beep once on power-up
 
+  // --- Initialize I2C first ---
+  Wire.begin();
+  Serial.println("I2C initialized.");
+
+  // --- Scan I2C bus for debugging ---
+  scanI2C();
+
   // --- Motor Shield Setup ---
-  if (!AFMS.begin()) {
-    Serial.println("Could not find Motor Shield. Halting.");
+  Serial.println("Attempting to connect to Motor Shield...");
+  
+  // Test motor shield connection first
+  if (!testMotorShield()) {
+    Serial.println("Motor Shield not responding on I2C bus.");
+    Serial.println("Please check connections and try again.");
     while (1);
   }
-  Serial.println("Motor Shield found.");
+  
+  if (!AFMS.begin()) {
+    Serial.println("Could not find Motor Shield. Halting.");
+    Serial.println("Please check:");
+    Serial.println("1. Motor Shield is properly connected to Arduino");
+    Serial.println("2. I2C pins (SDA=20, SCL=21 on Mega 2560) are not shorted");
+    Serial.println("3. Power supply is adequate");
+    Serial.println("4. Motor Shield address jumpers (if any) are set correctly");
+    while (1);
+  }
+  Serial.println("Motor Shield found and initialized successfully.");
 
   // --- Sonar Pin Setup ---
   pinMode(FWD_TRIG_PIN, OUTPUT);
   pinMode(FWD_ECHO_PIN, INPUT);
   pinMode(GND_TRIG_PIN, OUTPUT);
   pinMode(GND_ECHO_PIN, INPUT);
+  Serial.println("Sonar pins configured.");
 
   // --- GY-65 (BMP180) Setup & Calibration ---
-  Wire.begin();
+  Serial.println("Attempting to connect to GY-65 (BMP180)...");
   if (!initializeBMP180()) {
     Serial.println("Could not find GY-65 (BMP180). Halting.");
+    Serial.println("Please check GY-65 connections.");
     while (1);
   }
   Serial.println("GY-65 (BMP180) connection successful");
@@ -378,6 +401,56 @@ void updateDistance() {
 //======================================================================
 // UTILITY & HELPER FUNCTIONS
 //======================================================================
+
+/**
+ * Scans I2C bus for connected devices.
+ */
+void scanI2C() {
+  Serial.println("Scanning I2C bus...");
+  byte error, address;
+  int nDevices = 0;
+  
+  for(address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    
+    if (error == 0) {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16) {
+        Serial.print("0");
+      }
+      Serial.println(address, HEX);
+      nDevices++;
+    }
+  }
+  
+  if (nDevices == 0) {
+    Serial.println("No I2C devices found");
+  } else {
+    Serial.print("Found ");
+    Serial.print(nDevices);
+    Serial.println(" I2C device(s)");
+  }
+}
+
+/**
+ * Tests motor shield connection.
+ * @return True if motor shield is responding, false otherwise.
+ */
+bool testMotorShield() {
+  // Try to communicate with the motor shield
+  Wire.beginTransmission(0x60); // Adafruit Motor Shield default address
+  byte error = Wire.endTransmission();
+  
+  if (error == 0) {
+    Serial.println("Motor Shield I2C address (0x60) responding");
+    return true;
+  } else {
+    Serial.print("Motor Shield I2C error: ");
+    Serial.println(error);
+    return false;
+  }
+}
 
 /**
  * Controls both motors at a given speed.
