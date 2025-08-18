@@ -1,5 +1,22 @@
 //======================================================================
 // LIBRARIES
+/Users/olegbourdo/Documents/Arduino/auto_robot/caribean_pirates_melody.ino: In function 'void setup()':
+/Users/olegbourdo/Documents/Arduino/auto_robot/caribean_pirates_melody.ino:153:6: error: redefinition of 'void setup()'
+ void setup() {
+      ^~~~~
+/Users/olegbourdo/Documents/Arduino/auto_robot/auto_robot.ino:61:6: note: 'void setup()' previously defined here
+ void setup() {
+      ^~~~~
+/Users/olegbourdo/Documents/Arduino/auto_robot/caribean_pirates_melody.ino: In function 'void loop()':
+/Users/olegbourdo/Documents/Arduino/auto_robot/caribean_pirates_melody.ino:158:6: error: redefinition of 'void loop()'
+ void loop() {
+      ^~~~
+/Users/olegbourdo/Documents/Arduino/auto_robot/auto_robot.ino:122:6: note: 'void loop()' previously defined here
+ void loop() {
+      ^~~~
+exit status 1
+
+Compilation error: redefinition of 'void setup()'
 //======================================================================
 #include <Wire.h>
 #include <AFMotor.h>
