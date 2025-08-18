@@ -30,10 +30,6 @@ void rightBackwardStep() {
 AccelStepper leftStepper(leftForwardStep, leftBackwardStep);
 AccelStepper rightStepper(rightForwardStep, rightBackwardStep);
 
-// GY-65 (BMP180) I2C address
-#define BMP180_ADDR_DEFAULT 0x77
-byte BMP180_ADDR = BMP180_ADDR_DEFAULT; // Will be updated during initialization
-
 // Sonar Pins
 const int FWD_TRIG_PIN = 30;
 const int FWD_ECHO_PIN = 31;
@@ -58,10 +54,6 @@ const int TURN_SPEED = 130;
 // Obstacle detection thresholds (in cm)
 const int OBSTACLE_THRESHOLD_CM = 20; // If something is closer than this, it's an obstacle.
 const int CLIFF_THRESHOLD_CM = 15;    // If the ground is further than this, it's a cliff/drop.
-
-// Distance measurement variables
-float initialDistance = 0;
-float currentDistance = 0;
 
 //======================================================================
 // SETUP FUNCTION - Runs once at the beginning
@@ -113,20 +105,6 @@ void setup() {
   Serial.println("Initial buzzer beep...");
   tone(BUZZER_PIN, 1000, 250);
   delay(1000);
-  
-  // Initialize and calibrate GY-65 (BMP180)
-  Serial.println("Initializing GY-65 (BMP180)...");
-  if (!initializeBMP180()) {
-    Serial.println("Could not find GY-65 (BMP180). Halting.");
-    while (1) {
-      tone(BUZZER_PIN, 500, 500);
-      delay(2000);
-    }
-  }
-  
-  // Calibrate distance sensor
-  Serial.println("Calibrating distance sensor...");
-  calibrateDistance();
   
   // Setup completion buzzer beeps using working tone code
   Serial.println("Setup completion buzzer...");
@@ -370,146 +348,6 @@ bool checkForObstacles() {
 }
 
 //======================================================================
-// GY-65 (BMP180) FUNCTIONS
-//======================================================================
-
-/**
- * Initializes the BMP180 sensor.
- * @return True if successful, false otherwise.
- */
-bool initializeBMP180() {
-  // Try both possible BMP180 addresses
-  byte addresses[] = {0x77, 0x76}; // Common BMP180 addresses
-  
-  for (int i = 0; i < 2; i++) {
-    byte addr = addresses[i];
-    Serial.print("Trying BMP180 at address 0x");
-    Serial.println(addr, HEX);
-    
-    Wire.beginTransmission(addr);
-    Wire.write(0xD0); // Chip ID register
-    byte error = Wire.endTransmission(false);
-    
-    if (error != 0) {
-      Serial.print("Error ");
-      Serial.print(error);
-      Serial.print(" when trying to communicate with address 0x");
-      Serial.println(addr, HEX);
-      continue;
-    }
-    
-    Wire.requestFrom((uint8_t)addr, (uint8_t)1, (uint8_t)true);
-    if (Wire.available()) {
-      byte chipId = Wire.read();
-      Serial.print("Chip ID: 0x");
-      Serial.println(chipId, HEX);
-      
-      if (chipId == 0x55) { // BMP180 chip ID
-        Serial.print("BMP180 found at address 0x");
-        Serial.println(addr, HEX);
-        // Update the global address
-        BMP180_ADDR = addr;
-        return true;
-      } else {
-        Serial.print("Wrong chip ID: 0x");
-        Serial.println(chipId, HEX);
-      }
-    } else {
-      Serial.println("No response from device");
-    }
-  }
-  
-  Serial.println("BMP180 not found on any expected address");
-  return false;
-}
-
-/**
- * Reads temperature from BMP180.
- * @return Temperature in degrees Celsius.
- */
-float readTemperature() {
-  Wire.beginTransmission(BMP180_ADDR);
-  Wire.write(0xF4); // Control register
-  Wire.write(0x2E); // Start temperature measurement
-  Wire.endTransmission();
-  delay(5); // Wait for measurement
-  
-  Wire.beginTransmission(BMP180_ADDR);
-  Wire.write(0xF6); // Data register
-  Wire.endTransmission(false);
-  Wire.requestFrom((uint8_t)BMP180_ADDR, (uint8_t)2, (uint8_t)true);
-  
-  int rawTemp = Wire.read() << 8 | Wire.read();
-  float temp = (float)rawTemp / 10.0;
-  return temp;
-}
-
-/**
- * Reads pressure from BMP180.
- * @return Pressure in Pa.
- */
-long readPressure() {
-  Wire.beginTransmission(BMP180_ADDR);
-  Wire.write(0xF4); // Control register
-  Wire.write(0x34); // Start pressure measurement
-  Wire.endTransmission();
-  delay(26); // Wait for measurement
-  
-  Wire.beginTransmission(BMP180_ADDR);
-  Wire.write(0xF6); // Data register
-  Wire.endTransmission(false);
-  Wire.requestFrom((uint8_t)BMP180_ADDR, (uint8_t)3, (uint8_t)true);
-  
-  long pressure = Wire.read() << 16 | Wire.read() << 8 | Wire.read();
-  pressure >>= 8;
-  return pressure;
-}
-
-/**
- * Calculates altitude from pressure.
- * @param pressure Pressure in Pa.
- * @return Altitude in meters.
- */
-float calculateAltitude(long pressure) {
-  float altitude = 44330 * (1 - pow(pressure / 101325.0, 0.1903));
-  return altitude;
-}
-
-/**
- * Calibrates the distance measurement using the GY-65.
- */
-void calibrateDistance() {
-  Serial.println("Calibrating distance measurement with GY-65...");
-  
-  // Take multiple readings and average them
-  float totalAltitude = 0;
-  const int samples = 10;
-  
-  for (int i = 0; i < samples; i++) {
-    long pressure = readPressure();
-    float altitude = calculateAltitude(pressure);
-    totalAltitude += altitude;
-    delay(100);
-  }
-  
-  initialDistance = totalAltitude / samples;
-  currentDistance = initialDistance;
-  
-  Serial.print("Initial distance calibrated: ");
-  Serial.print(initialDistance);
-  Serial.println(" meters");
-}
-
-/**
- * Updates the current distance measurement.
- */
-void updateDistance() {
-  long pressure = readPressure();
-  float altitude = calculateAltitude(pressure);
-  currentDistance = altitude;
-}
-
-//======================================================================
 // UTILITY & HELPER FUNCTIONS
 //======================================================================
 
@@ -555,54 +393,6 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
 void stopMotors() {
   leftStepper.setSpeed(0);
   rightStepper.setSpeed(0);
-}
-
-/**
- * Scans the I2C bus for connected devices.
- */
-void scanI2C() {
-  byte error, address;
-  int nDevices = 0;
-  Serial.println("I2C devices found:");
-  for (address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address < 16)
-        Serial.print("0");
-      Serial.println(address, HEX);
-      nDevices++;
-    }
-    else if (error == 4) {
-      Serial.print("Unknown error at address 0x");
-      if (address < 16)
-        Serial.print("0");
-      Serial.println(address, HEX);
-    }
-  }
-  if (nDevices == 0)
-    Serial.println("No I2C devices found\n");
-  else
-    Serial.println("done\n");
-}
-
-/**
- * Tests the I2C connection to the GY-65 sensor.
- * @return True if connection is successful, false otherwise.
- */
-bool checkI2CConnection() {
-  Serial.println("Testing I2C connection to GY-65...");
-  Wire.beginTransmission(BMP180_ADDR);
-  if (Wire.endTransmission() == 0) {
-    Serial.print("GY-65 found at address 0x");
-    Serial.println(BMP180_ADDR, HEX);
-    return true;
-  } else {
-    Serial.print("GY-65 not found at address 0x");
-    Serial.println(BMP180_ADDR, HEX);
-    return false;
-  }
 }
 
 /**
