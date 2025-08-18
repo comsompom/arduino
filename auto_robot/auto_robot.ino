@@ -67,6 +67,13 @@ void setup() {
   // AFMotor library handles pin configuration internally
   Serial.println("Motor pins configured.");
   
+  // Initialize motors
+  leftMotor.setSpeed(0);
+  rightMotor.setSpeed(0);
+  leftMotor.run(RELEASE);
+  rightMotor.run(RELEASE);
+  Serial.println("Motors initialized and stopped.");
+  
   // Print motor shield information
   printMotorShieldInfo();
   
@@ -75,7 +82,6 @@ void setup() {
 
   // --- Test Motors ---
   Serial.println("Testing motors...");
-  // testMotors(); // Comment out automatic test
   manualMotorTest(); // Use manual test instead
 
   // --- Sonar Pin Setup ---
@@ -465,25 +471,31 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
   Serial.println(rightSpeed);
   
   // Control Left Motor
-  if (leftSpeed >= 0) {
+  if (leftSpeed > 0) {
     leftMotor.run(FORWARD);
     leftMotor.setSpeed(leftSpeed);
     Serial.println("Left motor: FORWARD");
-  } else {
+  } else if (leftSpeed < 0) {
     leftMotor.run(BACKWARD);
     leftMotor.setSpeed(-leftSpeed);
     Serial.println("Left motor: BACKWARD");
+  } else {
+    leftMotor.run(RELEASE);
+    Serial.println("Left motor: STOP");
   }
 
   // Control Right Motor
-  if (rightSpeed >= 0) {
+  if (rightSpeed > 0) {
     rightMotor.run(FORWARD);
     rightMotor.setSpeed(rightSpeed);
     Serial.println("Right motor: FORWARD");
-  } else {
+  } else if (rightSpeed < 0) {
     rightMotor.run(BACKWARD);
     rightMotor.setSpeed(-rightSpeed);
     Serial.println("Right motor: BACKWARD");
+  } else {
+    rightMotor.run(RELEASE);
+    Serial.println("Right motor: STOP");
   }
 }
 
@@ -544,196 +556,45 @@ bool checkI2CConnection() {
 }
 
 /**
- * Tests the motors by moving them forward and backward.
- */
-void testMotors() {
-  Serial.println("Testing motors forward...");
-  setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
-  delay(2000); // Move forward for 2 seconds
-  stopMotors();
-  delay(1000); // Pause for 1 second
-
-  Serial.println("Testing motors backward...");
-  setMotorSpeed(-MOTOR_SPEED, -MOTOR_SPEED);
-  delay(2000); // Move backward for 2 seconds
-  stopMotors();
-  delay(1000); // Pause for 1 second
-
-  Serial.println("Testing motors turn right...");
-  setMotorSpeed(TURN_SPEED, -TURN_SPEED);
-  delay(1000); // Turn for 1 second
-  stopMotors();
-  delay(1000); // Pause for 1 second
-
-  Serial.println("Testing motors turn left...");
-  setMotorSpeed(-TURN_SPEED, TURN_SPEED);
-  delay(1000); // Turn for 1 second
-  stopMotors();
-  delay(1000); // Pause for 1 second
-
-  Serial.println("Motor test complete.");
-  
-  // If no movement was detected, try alternative configurations
-  Serial.println("If no movement was detected, trying alternative pin configurations...");
-  testAlternativeMotorConfigs();
-}
-
-/**
  * Manual motor test function - call this from setup() to test motors manually.
  * Comment out the automatic test and uncomment this line in setup():
  * manualMotorTest();
  */
 void manualMotorTest() {
   Serial.println("\n=== MANUAL MOTOR TEST ===");
-  Serial.println("This will test each motor individually.");
-  Serial.println("Watch for movement and tell me which configuration works.");
+  Serial.println("Testing basic motor functionality...");
   
-  // Test current configuration first
-  Serial.println("\n1. Testing current configuration (pins 2,3,9,4,5,10)...");
-  delay(3000);
-  
-  // Test left motor forward
-  Serial.println("Testing left motor forward...");
+  // Test forward movement
+  Serial.println("Testing forward movement...");
   leftMotor.run(FORWARD);
-  leftMotor.setSpeed(200);
-  delay(2000);
-  leftMotor.setSpeed(0);
+  rightMotor.run(FORWARD);
+  leftMotor.setSpeed(150);
+  rightMotor.setSpeed(150);
+  delay(3000);
+  stopMotors();
   delay(1000);
   
-  // Test right motor forward
-  Serial.println("Testing right motor forward...");
-  rightMotor.run(FORWARD);
-  rightMotor.setSpeed(200);
+  // Test backward movement
+  Serial.println("Testing backward movement...");
+  leftMotor.run(BACKWARD);
+  rightMotor.run(BACKWARD);
+  leftMotor.setSpeed(150);
+  rightMotor.setSpeed(150);
+  delay(3000);
+  stopMotors();
+  delay(1000);
+  
+  // Test turn right
+  Serial.println("Testing turn right...");
+  leftMotor.run(FORWARD);
+  rightMotor.run(BACKWARD);
+  leftMotor.setSpeed(130);
+  rightMotor.setSpeed(130);
   delay(2000);
-  rightMotor.setSpeed(0);
+  stopMotors();
   delay(1000);
   
   Serial.println("Manual motor test complete.");
-  Serial.println("If no movement, the pin configuration is incorrect.");
-  
-  // Now test alternative configurations
-  Serial.println("\n=== TESTING ALTERNATIVE CONFIGURATIONS ===");
-  
-  // Test Arduino Motor Shield R3 configuration
-  Serial.println("Testing Arduino Motor Shield R3 (pins 12,13,3,11,8,9)...");
-  testSimpleMotorConfig(12, 13, 3, 11, 8, 9);
-  
-  // Test L298N alternative
-  Serial.println("Testing L298N Alternative (pins 6,7,5,8,9,10)...");
-  testSimpleMotorConfig(6, 7, 5, 8, 9, 10);
-  
-  // Test another common configuration
-  Serial.println("Testing Common Alternative (pins 22,24,2,26,28,3)...");
-  testSimpleMotorConfig(22, 24, 2, 26, 28, 3);
-  
-  Serial.println("All motor tests complete. Tell me which one worked!");
-}
-
-/**
- * Simple motor configuration test.
- */
-void testSimpleMotorConfig(int leftIn1, int leftIn2, int leftEna, int rightIn3, int rightIn4, int rightEnb) {
-  // This function is no longer needed with AFMotor library
-  // AFMotor handles pin configuration internally
-  Serial.println("  AFMotor library handles pin configuration automatically.");
-  Serial.println("  Testing with AFMotor library...");
-  
-  // Test left motor
-  Serial.println("  Testing left motor...");
-  leftMotor.run(FORWARD);
-  leftMotor.setSpeed(255); // Full speed
-  delay(2000);
-  leftMotor.setSpeed(0);
-  delay(1000);
-  
-  // Test right motor
-  Serial.println("  Testing right motor...");
-  rightMotor.run(FORWARD);
-  rightMotor.setSpeed(255); // Full speed
-  delay(2000);
-  rightMotor.setSpeed(0);
-  delay(1000);
-}
-
-/**
- * Tests alternative motor shield pin configurations.
- */
-void testAlternativeMotorConfigs() {
-  Serial.println("\n=== TESTING ALTERNATIVE MOTOR CONFIGURATIONS ===");
-  
-  // Configuration 1: Arduino Motor Shield R3
-  Serial.println("Testing Arduino Motor Shield R3 configuration...");
-  testMotorConfig(12, 13, 3, 11, 8, 9, "Arduino Motor Shield R3");
-  
-  // Configuration 2: L298N with different pins
-  Serial.println("Testing L298N alternative configuration...");
-  testMotorConfig(6, 7, 5, 8, 9, 10, "L298N Alternative");
-  
-  // Configuration 3: Another common configuration
-  Serial.println("Testing another common configuration...");
-  testMotorConfig(22, 24, 2, 26, 28, 3, "Common Alternative");
-  
-  Serial.println("=== ALTERNATIVE CONFIGURATION TESTS COMPLETE ===");
-}
-
-/**
- * Tests a specific motor pin configuration.
- * @param leftIn1 Left motor direction pin 1
- * @param leftIn2 Left motor direction pin 2
- * @param leftEna Left motor enable pin
- * @param rightIn3 Right motor direction pin 1
- * @param rightIn4 Right motor direction pin 2
- * @param rightEnb Right motor enable pin
- * @param configName Name of the configuration being tested
- */
-void testMotorConfig(int leftIn1, int leftIn2, int leftEna, int rightIn3, int rightIn4, int rightEnb, String configName) {
-  Serial.print("Testing ");
-  Serial.println(configName);
-  
-  // Setup pins for this configuration
-  pinMode(leftIn1, OUTPUT);
-  pinMode(leftIn2, OUTPUT);
-  pinMode(leftEna, OUTPUT);
-  pinMode(rightIn3, OUTPUT);
-  pinMode(rightIn4, OUTPUT);
-  pinMode(rightEnb, OUTPUT);
-  
-  // Stop motors first
-  digitalWrite(leftIn1, LOW);
-  digitalWrite(leftIn2, LOW);
-  analogWrite(leftEna, 0);
-  digitalWrite(rightIn3, LOW);
-  digitalWrite(rightIn4, LOW);
-  analogWrite(rightEnb, 0);
-  
-  delay(500);
-  
-  // Test forward movement
-  Serial.print("  Testing forward movement with ");
-  Serial.println(configName);
-  
-  digitalWrite(leftIn1, HIGH);
-  digitalWrite(leftIn2, LOW);
-  analogWrite(leftEna, 150);
-  digitalWrite(rightIn3, HIGH);
-  digitalWrite(rightIn4, LOW);
-  analogWrite(rightEnb, 150);
-  
-  delay(2000); // Test for 2 seconds
-  
-  // Stop
-  digitalWrite(leftIn1, LOW);
-  digitalWrite(leftIn2, LOW);
-  analogWrite(leftEna, 0);
-  digitalWrite(rightIn3, LOW);
-  digitalWrite(rightIn4, LOW);
-  analogWrite(rightEnb, 0);
-  
-  delay(1000);
-  
-  Serial.print("  ");
-  Serial.print(configName);
-  Serial.println(" test complete.");
 }
 
 /**
