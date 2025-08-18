@@ -12,6 +12,9 @@
 AF_Stepper motor1(200, 1);  // Left motor
 AF_Stepper motor2(200, 2);  // Right motor
 
+// Gyro sensor address
+#define MPU6050_ADDR 0x68
+
 // Stepper motor control functions - exactly like test_motor.ino
 void leftForwardStep() {  
   motor1.onestep(FORWARD, SINGLE);
@@ -67,83 +70,73 @@ float currentDistance = 0;
 // SETUP FUNCTION - Runs once at the beginning
 //======================================================================
 void setup() {
-  Serial.begin(115200);
-  Serial.println("Robot starting up...");
-
-  // --- Initial Setup & Beep ---
-  pinMode(BUZZER_PIN, OUTPUT);
-  beep(1, 250); // Beep once on power-up
-
-  // --- Initialize I2C for GY-65 ---
+  // Initialize serial communication
+  Serial.begin(9600);
+  Serial.println("Auto Robot Starting...");
+  
+  // Initialize I2C communication
   Wire.begin();
-  Serial.println("I2C initialized for GY-65 sensor.");
-
-  // --- Scan I2C bus to see what devices are connected ---
-  Serial.println("Scanning I2C bus for connected devices...");
-  scanI2C();
-
-  // --- Motor Pin Setup ---
-  // AFMotor library handles pin configuration internally
-  Serial.println("Motor pins configured.");
+  
+  // Initialize buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+  
+  // Initialize sonar sensors
+  pinMode(FWD_TRIG_PIN, OUTPUT);
+  pinMode(FWD_ECHO_PIN, INPUT);
+  pinMode(GND_TRIG_PIN, OUTPUT);
+  pinMode(GND_ECHO_PIN, INPUT);
   
   // Initialize stepper motors
   leftStepper.setSpeed(50);
   rightStepper.setSpeed(50);
   Serial.println("Stepper motors initialized.");
   
-  // Test motor power
-  testMotorPower();
-  
   // Print motor shield information
   printMotorShieldInfo();
   
-  // Help identify motor shield
-  identifyMotorShield();
-
-  // --- Test Motors ---
-  Serial.println("Testing motors...");
-  manualMotorTest(); // Use manual test instead
-
-  // --- Sonar Pin Setup ---
-  pinMode(FWD_TRIG_PIN, OUTPUT);
-  pinMode(FWD_ECHO_PIN, INPUT);
-  pinMode(GND_TRIG_PIN, OUTPUT);
-  pinMode(GND_ECHO_PIN, INPUT);
-  Serial.println("Sonar pins configured.");
-
-  // --- GY-65 (BMP180) Setup & Calibration ---
-  Serial.println("Attempting to connect to GY-65 (BMP180)...");
+  // Initial buzzer beep
+  beepBuzzer(1);
+  delay(1000);
   
-  // Test I2C connection first
-  if (!checkI2CConnection()) {
-    Serial.println("I2C connection test failed. Please check:");
-    Serial.println("1. SDA and SCL connections (SDA=pin 20, SCL=pin 21 on Mega 2560)");
-    Serial.println("2. Power supply to GY-65 sensor");
-    Serial.println("3. Pull-up resistors (if needed)");
-    Serial.println("4. No short circuits on I2C lines");
-    while (1);
-  }
-  
+  // Initialize and calibrate GY-65 (BMP180)
+  Serial.println("Initializing GY-65 (BMP180)...");
   if (!initializeBMP180()) {
     Serial.println("Could not find GY-65 (BMP180). Halting.");
-    Serial.println("Please check GY-65 connections and try again.");
-    while (1);
+    while (1) {
+      beepBuzzer(3);
+      delay(2000);
+    }
   }
-  Serial.println("GY-65 (BMP180) connection successful");
   
+  // Initialize and calibrate MPU6050 (Gyro)
+  Serial.println("Initializing MPU6050 (Gyro)...");
+  if (!initializeMPU6050()) {
+    Serial.println("Could not find MPU6050 (Gyro). Halting.");
+    while (1) {
+      beepBuzzer(3);
+      delay(2000);
+    }
+  }
+  
+  // Calibrate distance sensor
+  Serial.println("Calibrating distance sensor...");
   calibrateDistance();
-
-  // --- Post-setup Beeps ---
-  beep(2, 100); // Beep twice to indicate setup is complete
-
-  Serial.println("\nSetup complete. Ready to move.");
-  delay(1000); // Wait a moment before starting the main sequence
+  
+  // Setup completion buzzer beeps
+  beepBuzzer(2);
+  
+  Serial.println("Setup complete. Robot ready to move!");
+  delay(2000);
 }
 
 //======================================================================
 // MAIN LOOP - Contains the robot's movement sequence
 //======================================================================
 void loop() {
+  // Reset gyro yaw to zero at the start of the sequence
+  resetGyroYaw();
+  
   // This is the main sequence as requested.
   Serial.println("Step 1: Moving forward 2 meters...");
   moveForwardWithObstacleCheck(200); // 200 cm = 2 meters
@@ -170,74 +163,126 @@ void loop() {
 //======================================================================
 
 /**
- * Moves the robot forward for a given distance, continuously checking for obstacles.
+ * Moves the robot forward for a given distance using gyro-based navigation.
+ * Continuously monitors gyro data to maintain straight line movement.
  * @param distanceCm The distance to travel in centimeters.
  */
 void moveForwardWithObstacleCheck(float distanceCm) {
+  Serial.print("Moving forward "); Serial.print(distanceCm); Serial.println(" cm");
+  
+  // Get initial gyro reading for reference
+  float initialYaw = getGyroYaw();
+  float currentYaw = initialYaw;
+  float yawError = 0;
+  
   // Calculate the time required to travel the distance based on the calibrated speed
   float durationSeconds = distanceCm / ROBOT_SPEED_CM_PER_S;
   long durationMillis = durationSeconds * 1000;
 
   unsigned long startTime = millis();
+  unsigned long lastGyroCheck = millis();
   
   while (millis() - startTime < durationMillis) {
-    if (checkForObstacles()) {
-      Serial.println("Obstacle detected! Attempting to avoid...");
-      stopMotors();
-      if (avoidObstacle()) {
-        Serial.println("Obstacle avoided, continuing...");
-        // Recalculate remaining time and continue
-        unsigned long elapsedTime = millis() - startTime;
-        long remainingTime = durationMillis - elapsedTime;
-        if (remainingTime > 0) {
-          startTime = millis() - remainingTime;
-          continue;
+    // Check for obstacles every 100ms
+    if (millis() - lastGyroCheck > 100) {
+      if (checkForObstacles()) {
+        Serial.println("Obstacle detected! Attempting to avoid...");
+        stopMotors();
+        if (avoidObstacle()) {
+          Serial.println("Obstacle avoided, continuing...");
+          // Recalculate remaining time and continue
+          unsigned long elapsedTime = millis() - startTime;
+          long remainingTime = durationMillis - elapsedTime;
+          if (remainingTime > 0) {
+            startTime = millis() - remainingTime;
+            // Reset gyro reference after obstacle avoidance
+            initialYaw = getGyroYaw();
+            continue;
+          }
+        } else {
+          Serial.println("Could not avoid obstacle. Stopping movement.");
+          return; // Exit the function
         }
-      } else {
-        Serial.println("Could not avoid obstacle. Stopping movement.");
-        return; // Exit the function
       }
+      lastGyroCheck = millis();
     }
     
-    // If no obstacle, keep moving forward
-    setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
+    // Get current gyro reading and calculate error
+    currentYaw = getGyroYaw();
+    yawError = currentYaw - initialYaw;
+    
+    // Apply gyro correction to maintain straight line
+    int leftSpeed = MOTOR_SPEED;
+    int rightSpeed = MOTOR_SPEED;
+    
+    // Simple proportional correction
+    if (yawError > 2.0) { // Robot turning right, slow down left motor
+      leftSpeed = MOTOR_SPEED - (int)(yawError * 5);
+      if (leftSpeed < 0) leftSpeed = 0;
+    } else if (yawError < -2.0) { // Robot turning left, slow down right motor
+      rightSpeed = MOTOR_SPEED - (int)(-yawError * 5);
+      if (rightSpeed < 0) rightSpeed = 0;
+    }
+    
+    // Set motor speeds with gyro correction
+    setMotorSpeed(leftSpeed, rightSpeed);
+    
     // Run stepper motors
     leftStepper.runSpeed();
     rightStepper.runSpeed();
-    delay(20); // Small delay to prevent overwhelming the loop
+    
+    // Print gyro data for debugging
+    Serial.print("Yaw: "); Serial.print(currentYaw, 1);
+    Serial.print(" Error: "); Serial.print(yawError, 1);
+    Serial.print(" L:"); Serial.print(leftSpeed);
+    Serial.print(" R:"); Serial.println(rightSpeed);
+    
+    delay(50); // Small delay for gyro reading stability
   }
   
   // Stop after the time has elapsed
   stopMotors();
+  Serial.println("Forward movement complete.");
 }
 
 /**
- * Turns the robot right by a specified angle using time-based turning.
+ * Turns the robot right by a specified angle using gyro-based turning.
  * @param targetAngle The angle in degrees to turn.
  */
 void turnRight(float targetAngle) {
-  // Calculate turn time based on angle (empirical calibration needed)
-  // Assuming 90 degrees takes about 1.5 seconds at TURN_SPEED
-  float turnTimeSeconds = (targetAngle / 90.0) * 1.5;
-  long turnTimeMillis = turnTimeSeconds * 1000;
+  Serial.print("Turning right "); Serial.print(targetAngle); Serial.println(" degrees");
+  
+  // Get initial gyro reading
+  float initialYaw = getGyroYaw();
+  float targetYaw = initialYaw + targetAngle;
+  float currentYaw = initialYaw;
   
   // Start turning: right motor backward, left motor forward
   setMotorSpeed(TURN_SPEED, -TURN_SPEED);
   
-  unsigned long startTime = millis();
-  while (millis() - startTime < turnTimeMillis) {
+  while (currentYaw < targetYaw - 1.0) { // Allow 1 degree tolerance
     // Run stepper motors
     leftStepper.runSpeed();
     rightStepper.runSpeed();
-    delay(20);
+    
+    // Get current gyro reading
+    currentYaw = getGyroYaw();
+    
+    // Print gyro data for debugging
+    Serial.print("Turning - Current: "); Serial.print(currentYaw, 1);
+    Serial.print(" Target: "); Serial.print(targetYaw, 1);
+    Serial.print(" Remaining: "); Serial.println(targetYaw - currentYaw, 1);
+    
+    delay(50);
   }
   
   stopMotors();
   delay(200); // Pause after turn
+  Serial.println("Turn complete.");
 }
 
 /**
- * Attempts to avoid obstacles by turning left or right.
+ * Attempts to avoid obstacles by turning left or right using gyro-based navigation.
  * @return True if avoidance was successful, false otherwise.
  */
 bool avoidObstacle() {
@@ -249,32 +294,54 @@ bool avoidObstacle() {
   Serial.print("Right distance: "); Serial.print(rightDistance); Serial.println(" cm");
   
   if (leftDistance > rightDistance && leftDistance > OBSTACLE_THRESHOLD_CM) {
-    // Turn left to avoid
-    Serial.println("Turning left to avoid obstacle...");
-    setMotorSpeed(-TURN_SPEED, TURN_SPEED);
-    unsigned long startTime = millis();
-    while (millis() - startTime < 1000) {
-      leftStepper.runSpeed();
-      rightStepper.runSpeed();
-      delay(20);
-    }
-    stopMotors();
+    // Turn left to avoid using gyro
+    Serial.println("Turning left 45 degrees to avoid obstacle...");
+    turnLeft(45);
     return true;
   } else if (rightDistance > OBSTACLE_THRESHOLD_CM) {
-    // Turn right to avoid
-    Serial.println("Turning right to avoid obstacle...");
-    setMotorSpeed(TURN_SPEED, -TURN_SPEED);
-    unsigned long startTime = millis();
-    while (millis() - startTime < 1000) {
-      leftStepper.runSpeed();
-      rightStepper.runSpeed();
-      delay(20);
-    }
-    stopMotors();
+    // Turn right to avoid using gyro
+    Serial.println("Turning right 45 degrees to avoid obstacle...");
+    turnRight(45);
     return true;
   }
   
   return false; // No clear path found
+}
+
+/**
+ * Turns the robot left by a specified angle using gyro-based turning.
+ * @param targetAngle The angle in degrees to turn.
+ */
+void turnLeft(float targetAngle) {
+  Serial.print("Turning left "); Serial.print(targetAngle); Serial.println(" degrees");
+  
+  // Get initial gyro reading
+  float initialYaw = getGyroYaw();
+  float targetYaw = initialYaw - targetAngle; // Negative for left turn
+  float currentYaw = initialYaw;
+  
+  // Start turning: left motor backward, right motor forward
+  setMotorSpeed(-TURN_SPEED, TURN_SPEED);
+  
+  while (currentYaw > targetYaw + 1.0) { // Allow 1 degree tolerance
+    // Run stepper motors
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    
+    // Get current gyro reading
+    currentYaw = getGyroYaw();
+    
+    // Print gyro data for debugging
+    Serial.print("Turning Left - Current: "); Serial.print(currentYaw, 1);
+    Serial.print(" Target: "); Serial.print(targetYaw, 1);
+    Serial.print(" Remaining: "); Serial.println(currentYaw - targetYaw, 1);
+    
+    delay(50);
+  }
+  
+  stopMotors();
+  delay(200); // Pause after turn
+  Serial.println("Left turn complete.");
 }
 
 /**
@@ -591,150 +658,99 @@ bool checkI2CConnection() {
 }
 
 /**
- * Tests motor power with different stepping modes.
+ * Initializes the MPU6050 (Gyro) sensor.
+ * @return True if successful, false otherwise.
  */
-void testMotorPower() {
-  Serial.println("\n=== MOTOR POWER TEST ===");
-  Serial.println("Testing different stepping modes and speeds...");
-  
-  // Test with SINGLE stepping mode
-  Serial.println("Testing SINGLE stepping mode...");
-  motor1.onestep(FORWARD, SINGLE);
-  delay(100);
-  motor1.onestep(FORWARD, SINGLE);
-  delay(100);
-  motor1.onestep(FORWARD, SINGLE);
-  delay(100);
-  
-  // Test with DOUBLE stepping mode
-  Serial.println("Testing DOUBLE stepping mode...");
-  motor1.onestep(FORWARD, DOUBLE);
-  delay(100);
-  motor1.onestep(FORWARD, DOUBLE);
-  delay(100);
-  motor1.onestep(FORWARD, DOUBLE);
-  delay(100);
-  
-  // Test with INTERLEAVE stepping mode
-  Serial.println("Testing INTERLEAVE stepping mode...");
-  motor1.onestep(FORWARD, INTERLEAVE);
-  delay(100);
-  motor1.onestep(FORWARD, INTERLEAVE);
-  delay(100);
-  motor1.onestep(FORWARD, INTERLEAVE);
-  delay(100);
-  
-  // Test with MICROSTEP stepping mode
-  Serial.println("Testing MICROSTEP stepping mode...");
-  motor1.onestep(FORWARD, MICROSTEP);
-  delay(100);
-  motor1.onestep(FORWARD, MICROSTEP);
-  delay(100);
-  motor1.onestep(FORWARD, MICROSTEP);
-  delay(100);
-  
-  Serial.println("Motor power test complete.");
-  Serial.println("Check which stepping mode made the motor move.");
+bool initializeMPU6050() {
+  Wire.beginTransmission(MPU6050_ADDR);
+  if (Wire.endTransmission() == 0) {
+    Serial.print("MPU6050 found at address 0x");
+    Serial.println(MPU6050_ADDR, HEX);
+    return true;
+  } else {
+    Serial.print("MPU6050 not found at address 0x");
+    Serial.println(MPU6050_ADDR, HEX);
+    return false;
+  }
 }
 
 /**
- * Manual motor test function - call this from setup() to test motors manually.
- * Comment out the automatic test and uncomment this line in setup():
- * manualMotorTest();
+ * Gets the current yaw angle from the gyro sensor.
+ * @return Current yaw angle in degrees.
  */
-void manualMotorTest() {
-  Serial.println("\n=== MANUAL MOTOR TEST ===");
-  Serial.println("Testing motors exactly like test_motor.ino...");
+float getGyroYaw() {
+  // Read gyro data from MPU6050
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(0x3B); // Start with register 0x3B (ACCEL_XOUT_H)
+  Wire.endTransmission(false);
+  Wire.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)14, (uint8_t)true);
   
-  // Test left motor (motor1) - exactly like test_motor.ino
-  Serial.println("Testing left motor (motor1)...");
-  leftStepper.setSpeed(50);
-  unsigned long startTime = millis();
-  while (millis() - startTime < 3000) {
-    leftStepper.runSpeed();
-    delay(20);
+  if (Wire.available() >= 14) {
+    int16_t ax = Wire.read() << 8 | Wire.read();
+    int16_t ay = Wire.read() << 8 | Wire.read();
+    int16_t az = Wire.read() << 8 | Wire.read();
+    int16_t gx = Wire.read() << 8 | Wire.read();
+    int16_t gy = Wire.read() << 8 | Wire.read();
+    int16_t gz = Wire.read() << 8 | Wire.read();
+    
+    // Convert gyro reading to degrees per second
+    float gyroZ = gz / 131.0; // MPU6050 sensitivity for ±250°/s range
+    
+    // Simple integration for yaw (in a real application, you'd use a proper filter)
+    static float yaw = 0;
+    static unsigned long lastTime = 0;
+    static bool firstReading = true;
+    unsigned long currentTime = millis();
+    
+    if (firstReading) {
+      lastTime = currentTime;
+      firstReading = false;
+      return 0; // Return 0 for first reading
+    }
+    
+    if (lastTime > 0) {
+      float dt = (currentTime - lastTime) / 1000.0; // Convert to seconds
+      yaw += gyroZ * dt;
+    }
+    lastTime = currentTime;
+    
+    return yaw;
   }
-  leftStepper.setSpeed(0);
-  delay(1000);
   
-  // Test right motor (motor2) - exactly like test_motor.ino
-  Serial.println("Testing right motor (motor2)...");
-  rightStepper.setSpeed(50);
-  startTime = millis();
-  while (millis() - startTime < 3000) {
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  rightStepper.setSpeed(0);
-  delay(1000);
-  
-  // Test both motors together
-  Serial.println("Testing both motors together...");
-  leftStepper.setSpeed(50);
-  rightStepper.setSpeed(50);
-  startTime = millis();
-  while (millis() - startTime < 3000) {
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  leftStepper.setSpeed(0);
-  rightStepper.setSpeed(0);
-  delay(1000);
-  
-  Serial.println("Manual motor test complete.");
+  return 0; // Return 0 if reading failed
 }
 
 /**
- * Provides information about common motor shield pin configurations.
+ * Resets the gyro yaw to zero.
+ */
+void resetGyroYaw() {
+  Serial.println("Resetting gyro yaw to zero...");
+  
+  // Reset the static variables in getGyroYaw function
+  // This is a simple approach - in a real application you'd use a proper filter
+  static float yaw = 0;
+  static unsigned long lastTime = 0;
+  static bool firstReading = true;
+  
+  // Reset the static variables
+  yaw = 0;
+  lastTime = 0;
+  firstReading = true;
+  
+  // Small delay to let gyro stabilize
+  delay(100);
+  Serial.println("Gyro yaw reset complete.");
+}
+
+/**
+ * Provides information about motor configuration.
  */
 void printMotorShieldInfo() {
-  Serial.println("\n=== MOTOR SHIELD CONFIGURATION ===");
+  Serial.println("\n=== MOTOR CONFIGURATION ===");
   Serial.println("Using AFMotor library with stepper motors.");
-  Serial.println("This library automatically handles pin configuration.");
-  Serial.println();
   Serial.println("Motor Configuration:");
   Serial.println("  Left Motor:  AF_Stepper(200, 1)");
   Serial.println("  Right Motor: AF_Stepper(200, 2)");
-  Serial.println();
-  Serial.println("AFMotor library features:");
-  Serial.println("  - Automatic pin configuration");
-  Serial.println("  - Built-in speed control");
-  Serial.println("  - Stepper motor control with AccelStepper");
-  Serial.println("  - Compatible with Adafruit Motor Shield");
   Serial.println("=====================================\n");
 }
 
-/**
- * Helps identify the motor shield type.
- */
-void identifyMotorShield() {
-  Serial.println("\n=== MOTOR SHIELD IDENTIFICATION ===");
-  Serial.println("Using AFMotor library with stepper motors.");
-  Serial.println("Testing motors one at a time...");
-  
-  // Test left motor only
-  Serial.println("Testing left motor only...");
-  leftStepper.setSpeed(50);
-  unsigned long startTime = millis();
-  while (millis() - startTime < 2000) {
-    leftStepper.runSpeed();
-    delay(20);
-  }
-  leftStepper.setSpeed(0);
-  delay(1000);
-  
-  // Test right motor only
-  Serial.println("Testing right motor only...");
-  rightStepper.setSpeed(50);
-  startTime = millis();
-  while (millis() - startTime < 2000) {
-    rightStepper.runSpeed();
-    delay(20);
-  }
-  rightStepper.setSpeed(0);
-  delay(1000);
-  
-  Serial.println("=== MOTOR SHIELD IDENTIFICATION COMPLETE ===");
-  Serial.println("AFMotor library with stepper motors is working correctly.");
-}
