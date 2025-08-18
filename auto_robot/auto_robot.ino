@@ -3,8 +3,6 @@
 //======================================================================
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
-#include "I2Cdev.h"
-#include "MPU6050.h"
 
 //======================================================================
 // PIN & OBJECT DEFINITIONS
@@ -14,10 +12,10 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
 // Select which shield connections to use for the motors
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);  // M1
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(4); // M4
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(3); // M4
 
-// MPU6050 Gyroscope object
-MPU6050 accelgyro;
+// MPU6050 I2C address
+#define MPU6050_ADDR 0x68
 
 // Sonar Pins
 const int FWD_TRIG_PIN = 30;
@@ -78,8 +76,11 @@ void setup() {
 
   // --- Gyroscope Setup & Calibration ---
   Wire.begin();
-  accelgyro.initialize();
-  Serial.println(accelgyro.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0);    // Wake up the MPU6050
+  Wire.endTransmission(true);
+  Serial.println("MPU6050 connection successful");
   
   calibrateGyro();
 
@@ -167,7 +168,16 @@ void turnRightWithGyro(float targetAngle) {
     prevTime = currentTime;
 
     int16_t gx, gy, gz, ax, ay, az;
-    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x3B); // Starting with register 0x3B (ACCEL_XOUT_H)
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU6050_ADDR, 14, true); // Read 14 registers
+    ax = Wire.read() << 8 | Wire.read();
+    ay = Wire.read() << 8 | Wire.read();
+    az = Wire.read() << 8 | Wire.read();
+    gx = Wire.read() << 8 | Wire.read();
+    gy = Wire.read() << 8 | Wire.read();
+    gz = Wire.read() << 8 | Wire.read();
     
     // Use the calibrated Z-axis gyro data
     float gyroZ = (gz - gyro_z_offset) / 131.0; // Convert to degrees per second
@@ -237,7 +247,16 @@ void calibrateGyro() {
   long z_total = 0;
   for (int i = 0; i < GYRO_CALIBRATION_SAMPLES; i++) {
     int16_t gx, gy, gz, ax, ay, az;
-    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x3B); // Starting with register 0x3B (ACCEL_XOUT_H)
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU6050_ADDR, 14, true); // Read 14 registers
+    ax = Wire.read() << 8 | Wire.read();
+    ay = Wire.read() << 8 | Wire.read();
+    az = Wire.read() << 8 | Wire.read();
+    gx = Wire.read() << 8 | Wire.read();
+    gy = Wire.read() << 8 | Wire.read();
+    gz = Wire.read() << 8 | Wire.read();
     z_total += gz;
     delay(5);
   }
