@@ -3,13 +3,32 @@
 //======================================================================
 #include <Wire.h>
 #include <AFMotor.h>
+#include <AccelStepper.h>
 
 //======================================================================
 // PIN & OBJECT DEFINITIONS
 //======================================================================
-// Motor control using AFMotor library (working solution)
-AF_DCMotor leftMotor(1);  // Motor 1
-AF_DCMotor rightMotor(2); // Motor 2
+// Motor control using AFMotor library with stepper motors (working solution)
+AF_Stepper leftMotor(200, 1);  // 200 steps per revolution, motor 1
+AF_Stepper rightMotor(200, 2); // 200 steps per revolution, motor 2
+
+// Stepper motor control functions
+void leftForwardStep() {  
+  leftMotor.onestep(FORWARD, DOUBLE);
+}
+void leftBackwardStep() {  
+  leftMotor.onestep(BACKWARD, DOUBLE);
+}
+void rightForwardStep() {  
+  rightMotor.onestep(FORWARD, DOUBLE);
+}
+void rightBackwardStep() {  
+  rightMotor.onestep(BACKWARD, DOUBLE);
+}
+
+// Create AccelStepper objects
+AccelStepper leftStepper(leftForwardStep, leftBackwardStep);
+AccelStepper rightStepper(rightForwardStep, rightBackwardStep);
 
 // GY-65 (BMP180) I2C address
 #define BMP180_ADDR_DEFAULT 0x77
@@ -67,12 +86,10 @@ void setup() {
   // AFMotor library handles pin configuration internally
   Serial.println("Motor pins configured.");
   
-  // Initialize motors
-  leftMotor.setSpeed(0);
-  rightMotor.setSpeed(0);
-  leftMotor.run(RELEASE);
-  rightMotor.run(RELEASE);
-  Serial.println("Motors initialized and stopped.");
+  // Initialize stepper motors
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(50);
+  Serial.println("Stepper motors initialized.");
   
   // Print motor shield information
   printMotorShieldInfo();
@@ -181,6 +198,9 @@ void moveForwardWithObstacleCheck(float distanceCm) {
     
     // If no obstacle, keep moving forward
     setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
+    // Run stepper motors
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
     delay(20); // Small delay to prevent overwhelming the loop
   }
   
@@ -201,7 +221,13 @@ void turnRight(float targetAngle) {
   // Start turning: right motor backward, left motor forward
   setMotorSpeed(TURN_SPEED, -TURN_SPEED);
   
-  delay(turnTimeMillis);
+  unsigned long startTime = millis();
+  while (millis() - startTime < turnTimeMillis) {
+    // Run stepper motors
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   
   stopMotors();
   delay(200); // Pause after turn
@@ -223,14 +249,24 @@ bool avoidObstacle() {
     // Turn left to avoid
     Serial.println("Turning left to avoid obstacle...");
     setMotorSpeed(-TURN_SPEED, TURN_SPEED);
-    delay(1000); // Turn for 1 second
+    unsigned long startTime = millis();
+    while (millis() - startTime < 1000) {
+      leftStepper.runSpeed();
+      rightStepper.runSpeed();
+      delay(20);
+    }
     stopMotors();
     return true;
   } else if (rightDistance > OBSTACLE_THRESHOLD_CM) {
     // Turn right to avoid
     Serial.println("Turning right to avoid obstacle...");
     setMotorSpeed(TURN_SPEED, -TURN_SPEED);
-    delay(1000); // Turn for 1 second
+    unsigned long startTime = millis();
+    while (millis() - startTime < 1000) {
+      leftStepper.runSpeed();
+      rightStepper.runSpeed();
+      delay(20);
+    }
     stopMotors();
     return true;
   }
@@ -472,29 +508,25 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
   
   // Control Left Motor
   if (leftSpeed > 0) {
-    leftMotor.run(FORWARD);
-    leftMotor.setSpeed(leftSpeed);
+    leftStepper.setSpeed(leftSpeed);
     Serial.println("Left motor: FORWARD");
   } else if (leftSpeed < 0) {
-    leftMotor.run(BACKWARD);
-    leftMotor.setSpeed(-leftSpeed);
+    leftStepper.setSpeed(-leftSpeed);
     Serial.println("Left motor: BACKWARD");
   } else {
-    leftMotor.run(RELEASE);
+    leftStepper.setSpeed(0);
     Serial.println("Left motor: STOP");
   }
 
   // Control Right Motor
   if (rightSpeed > 0) {
-    rightMotor.run(FORWARD);
-    rightMotor.setSpeed(rightSpeed);
+    rightStepper.setSpeed(rightSpeed);
     Serial.println("Right motor: FORWARD");
   } else if (rightSpeed < 0) {
-    rightMotor.run(BACKWARD);
-    rightMotor.setSpeed(-rightSpeed);
+    rightStepper.setSpeed(-rightSpeed);
     Serial.println("Right motor: BACKWARD");
   } else {
-    rightMotor.run(RELEASE);
+    rightStepper.setSpeed(0);
     Serial.println("Right motor: STOP");
   }
 }
@@ -503,8 +535,8 @@ void setMotorSpeed(int leftSpeed, int rightSpeed) {
  * Stops both motors.
  */
 void stopMotors() {
-  leftMotor.run(RELEASE);
-  rightMotor.run(RELEASE);
+  leftStepper.setSpeed(0);
+  rightStepper.setSpeed(0);
 }
 
 /**
@@ -566,31 +598,40 @@ void manualMotorTest() {
   
   // Test forward movement
   Serial.println("Testing forward movement...");
-  leftMotor.run(FORWARD);
-  rightMotor.run(FORWARD);
-  leftMotor.setSpeed(150);
-  rightMotor.setSpeed(150);
-  delay(3000);
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(50);
+  unsigned long startTime = millis();
+  while (millis() - startTime < 3000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   // Test backward movement
   Serial.println("Testing backward movement...");
-  leftMotor.run(BACKWARD);
-  rightMotor.run(BACKWARD);
-  leftMotor.setSpeed(150);
-  rightMotor.setSpeed(150);
-  delay(3000);
+  leftStepper.setSpeed(-50);
+  rightStepper.setSpeed(-50);
+  startTime = millis();
+  while (millis() - startTime < 3000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   // Test turn right
   Serial.println("Testing turn right...");
-  leftMotor.run(FORWARD);
-  rightMotor.run(BACKWARD);
-  leftMotor.setSpeed(130);
-  rightMotor.setSpeed(130);
-  delay(2000);
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(-50);
+  startTime = millis();
+  while (millis() - startTime < 2000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
@@ -602,17 +643,17 @@ void manualMotorTest() {
  */
 void printMotorShieldInfo() {
   Serial.println("\n=== MOTOR SHIELD CONFIGURATION ===");
-  Serial.println("Using AFMotor library for motor control.");
+  Serial.println("Using AFMotor library with stepper motors.");
   Serial.println("This library automatically handles pin configuration.");
   Serial.println();
   Serial.println("Motor Configuration:");
-  Serial.println("  Left Motor:  AF_DCMotor(1)");
-  Serial.println("  Right Motor: AF_DCMotor(2)");
+  Serial.println("  Left Motor:  AF_Stepper(200, 1)");
+  Serial.println("  Right Motor: AF_Stepper(200, 2)");
   Serial.println();
   Serial.println("AFMotor library features:");
   Serial.println("  - Automatic pin configuration");
   Serial.println("  - Built-in speed control");
-  Serial.println("  - Direction control (FORWARD/BACKWARD/RELEASE)");
+  Serial.println("  - Stepper motor control with AccelStepper");
   Serial.println("  - Compatible with Adafruit Motor Shield");
   Serial.println("=====================================\n");
 }
@@ -622,49 +663,61 @@ void printMotorShieldInfo() {
  */
 void identifyMotorShield() {
   Serial.println("\n=== MOTOR SHIELD IDENTIFICATION ===");
-  Serial.println("Using AFMotor library for motor control.");
+  Serial.println("Using AFMotor library with stepper motors.");
   Serial.println("Testing motor movements...");
   
   // Test forward movement
   Serial.println("Testing forward movement...");
-  leftMotor.run(FORWARD);
-  rightMotor.run(FORWARD);
-  leftMotor.setSpeed(MOTOR_SPEED);
-  rightMotor.setSpeed(MOTOR_SPEED);
-  delay(2000);
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(50);
+  unsigned long startTime = millis();
+  while (millis() - startTime < 2000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   // Test backward movement
   Serial.println("Testing backward movement...");
-  leftMotor.run(BACKWARD);
-  rightMotor.run(BACKWARD);
-  leftMotor.setSpeed(MOTOR_SPEED);
-  rightMotor.setSpeed(MOTOR_SPEED);
-  delay(2000);
+  leftStepper.setSpeed(-50);
+  rightStepper.setSpeed(-50);
+  startTime = millis();
+  while (millis() - startTime < 2000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   // Test turn right
   Serial.println("Testing turn right...");
-  leftMotor.run(FORWARD);
-  rightMotor.run(BACKWARD);
-  leftMotor.setSpeed(TURN_SPEED);
-  rightMotor.setSpeed(TURN_SPEED);
-  delay(1000);
+  leftStepper.setSpeed(50);
+  rightStepper.setSpeed(-50);
+  startTime = millis();
+  while (millis() - startTime < 1000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   // Test turn left
   Serial.println("Testing turn left...");
-  leftMotor.run(BACKWARD);
-  rightMotor.run(FORWARD);
-  leftMotor.setSpeed(TURN_SPEED);
-  rightMotor.setSpeed(TURN_SPEED);
-  delay(1000);
+  leftStepper.setSpeed(-50);
+  rightStepper.setSpeed(50);
+  startTime = millis();
+  while (millis() - startTime < 1000) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(20);
+  }
   stopMotors();
   delay(1000);
   
   Serial.println("=== MOTOR SHIELD IDENTIFICATION COMPLETE ===");
-  Serial.println("AFMotor library is working correctly.");
+  Serial.println("AFMotor library with stepper motors is working correctly.");
 }
