@@ -62,6 +62,10 @@ void setup() {
   Wire.begin();
   Serial.println("I2C initialized for GY-65 sensor.");
 
+  // --- Scan I2C bus to see what devices are connected ---
+  Serial.println("Scanning I2C bus for connected devices...");
+  scanI2C();
+
   // --- Motor Pin Setup ---
   pinMode(LEFT_MOTOR_IN1, OUTPUT);
   pinMode(LEFT_MOTOR_IN2, OUTPUT);
@@ -83,9 +87,20 @@ void setup() {
 
   // --- GY-65 (BMP180) Setup & Calibration ---
   Serial.println("Attempting to connect to GY-65 (BMP180)...");
+  
+  // Test I2C connection first
+  if (!testI2CConnection()) {
+    Serial.println("I2C connection test failed. Please check:");
+    Serial.println("1. SDA and SCL connections (SDA=pin 20, SCL=pin 21 on Mega 2560)");
+    Serial.println("2. Power supply to GY-65 sensor");
+    Serial.println("3. Pull-up resistors (if needed)");
+    Serial.println("4. No short circuits on I2C lines");
+    while (1);
+  }
+  
   if (!initializeBMP180()) {
     Serial.println("Could not find GY-65 (BMP180). Halting.");
-    Serial.println("Please check GY-65 connections.");
+    Serial.println("Please check GY-65 connections and try again.");
     while (1);
   }
   Serial.println("GY-65 (BMP180) connection successful");
@@ -287,17 +302,49 @@ bool checkForObstacles() {
  * @return True if successful, false otherwise.
  */
 bool initializeBMP180() {
-  Wire.beginTransmission(BMP180_ADDR);
-  Wire.write(0xD0); // Chip ID register
-  Wire.endTransmission(false);
-  Wire.requestFrom(BMP180_ADDR, 1, true);
+  // Try both possible BMP180 addresses
+  byte addresses[] = {0x77, 0x76}; // Common BMP180 addresses
   
-  if (Wire.available()) {
-    byte chipId = Wire.read();
-    if (chipId == 0x55) { // BMP180 chip ID
-      return true;
+  for (int i = 0; i < 2; i++) {
+    byte addr = addresses[i];
+    Serial.print("Trying BMP180 at address 0x");
+    Serial.println(addr, HEX);
+    
+    Wire.beginTransmission(addr);
+    Wire.write(0xD0); // Chip ID register
+    byte error = Wire.endTransmission(false);
+    
+    if (error != 0) {
+      Serial.print("Error ");
+      Serial.print(error);
+      Serial.print(" when trying to communicate with address 0x");
+      Serial.println(addr, HEX);
+      continue;
+    }
+    
+    Wire.requestFrom(addr, 1, true);
+    if (Wire.available()) {
+      byte chipId = Wire.read();
+      Serial.print("Chip ID: 0x");
+      Serial.println(chipId, HEX);
+      
+      if (chipId == 0x55) { // BMP180 chip ID
+        Serial.print("BMP180 found at address 0x");
+        Serial.println(addr, HEX);
+        // Update the global address
+        #undef BMP180_ADDR
+        #define BMP180_ADDR addr
+        return true;
+      } else {
+        Serial.print("Wrong chip ID: 0x");
+        Serial.println(chipId, HEX);
+      }
+    } else {
+      Serial.println("No response from device");
     }
   }
+  
+  Serial.println("BMP180 not found on any expected address");
   return false;
 }
 
@@ -447,4 +494,52 @@ void stopMotors() {
   digitalWrite(RIGHT_MOTOR_IN3, LOW);
   digitalWrite(RIGHT_MOTOR_IN4, LOW);
   analogWrite(RIGHT_MOTOR_ENB, 0);
+}
+
+/**
+ * Scans the I2C bus for connected devices.
+ */
+void scanI2C() {
+  byte error, address;
+  int nDevices = 0;
+  Serial.println("I2C devices found:");
+  for (address = 1; address < 127; address++ ) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.println(address, HEX);
+      nDevices++;
+    }
+    else if (error == 4) {
+      Serial.print("Unknown error at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.println(address, HEX);
+    }
+  }
+  if (nDevices == 0)
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("done\n");
+}
+
+/**
+ * Tests the I2C connection to the GY-65 sensor.
+ * @return True if connection is successful, false otherwise.
+ */
+bool testI2CConnection() {
+  Serial.println("Testing I2C connection to GY-65...");
+  Wire.beginTransmission(BMP180_ADDR);
+  if (Wire.endTransmission() == 0) {
+    Serial.print("GY-65 found at address 0x");
+    Serial.println(BMP180_ADDR, HEX);
+    return true;
+  } else {
+    Serial.print("GY-65 not found at address 0x");
+    Serial.println(BMP180_ADDR, HEX);
+    return false;
+  }
 }
