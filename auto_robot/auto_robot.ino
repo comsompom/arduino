@@ -1,5 +1,25 @@
 //======================================================================
 // LIBRARIES
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
+     uint8_t requestFrom(int, int, int);
+             ^~~~~~~~~~~
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
+     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
+             ^~~~~~~~~~~
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h: In function 'float readTemperature()':
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
+     uint8_t requestFrom(int, int, int);
+             ^~~~~~~~~~~
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
+     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
+             ^~~~~~~~~~~
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h: In function 'long int readPressure()':
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
+     uint8_t requestFrom(int, int, int);
+             ^~~~~~~~~~~
+/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
+     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
+             ^~~~~~~~~~~
 //======================================================================
 #include <Wire.h>
 #include <AFMotor.h>
