@@ -44,7 +44,7 @@ const int GND_TRIG_PIN = 32;
 const int GND_ECHO_PIN = 33;
 
 // Buzzer Pin
-const int BUZZER_PIN = A3; // Changed from digital pin 22 to analog pin 3
+const int BUZZER_PIN = 13; // Changed from A3 to digital pin 13 (built-in LED pin, but can be used for buzzer)
 
 //======================================================================
 // CONSTANTS & CALIBRATION
@@ -97,6 +97,12 @@ void setup() {
     delay(100);
   }
   Serial.println("Buzzer test complete.");
+  
+  // Test buzzer with tone function if available
+  Serial.println("Testing buzzer with tone...");
+  tone(BUZZER_PIN, 1000, 200); // 1kHz for 200ms
+  delay(300);
+  Serial.println("Tone test complete.");
   
   // Initialize sonar sensors
   pinMode(FWD_TRIG_PIN, OUTPUT);
