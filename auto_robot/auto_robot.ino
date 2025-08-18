@@ -12,9 +12,6 @@
 AF_Stepper motor1(200, 1);  // Left motor
 AF_Stepper motor2(200, 2);  // Right motor
 
-// Gyro sensor address
-#define MPU6050_ADDR 0x68
-
 // Stepper motor control functions - exactly like test_motor.ino
 void leftForwardStep() {  
   motor1.onestep(FORWARD, SINGLE);
@@ -127,16 +124,6 @@ void setup() {
     }
   }
   
-  // Initialize and calibrate MPU6050 (Gyro)
-  Serial.println("Initializing MPU6050 (Gyro)...");
-  if (!initializeMPU6050()) {
-    Serial.println("Could not find MPU6050 (Gyro). Halting.");
-    while (1) {
-      tone(BUZZER_PIN, 500, 500);
-      delay(2000);
-    }
-  }
-  
   // Calibrate distance sensor
   Serial.println("Calibrating distance sensor...");
   calibrateDistance();
@@ -155,9 +142,6 @@ void setup() {
 // MAIN LOOP - Contains the robot's movement sequence
 //======================================================================
 void loop() {
-  // Reset gyro yaw to zero at the start of the sequence
-  resetGyroYaw();
-  
   // This is the main sequence as requested.
   Serial.println("Step 1: Moving forward 2 meters...");
   moveForwardWithObstacleCheck(200); // 200 cm = 2 meters
@@ -184,28 +168,26 @@ void loop() {
 //======================================================================
 
 /**
- * Moves the robot forward for a given distance using gyro-based navigation.
- * Continuously monitors gyro data to maintain straight line movement.
+ * Moves the robot forward for a given distance using time-based navigation.
+ * Continuously monitors for obstacles during movement.
  * @param distanceCm The distance to travel in centimeters.
  */
 void moveForwardWithObstacleCheck(float distanceCm) {
   Serial.print("Moving forward "); Serial.print(distanceCm); Serial.println(" cm");
-  
-  // Get initial gyro reading for reference
-  float initialYaw = getGyroYaw();
-  float currentYaw = initialYaw;
-  float yawError = 0;
   
   // Calculate the time required to travel the distance based on the calibrated speed
   float durationSeconds = distanceCm / ROBOT_SPEED_CM_PER_S;
   long durationMillis = durationSeconds * 1000;
 
   unsigned long startTime = millis();
-  unsigned long lastGyroCheck = millis();
+  unsigned long lastObstacleCheck = millis();
+  
+  // Set motors to move forward
+  setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
   
   while (millis() - startTime < durationMillis) {
     // Check for obstacles every 100ms
-    if (millis() - lastGyroCheck > 100) {
+    if (millis() - lastObstacleCheck > 100) {
       if (checkForObstacles()) {
         Serial.println("Obstacle detected! Attempting to avoid...");
         stopMotors();
@@ -216,8 +198,7 @@ void moveForwardWithObstacleCheck(float distanceCm) {
           long remainingTime = durationMillis - elapsedTime;
           if (remainingTime > 0) {
             startTime = millis() - remainingTime;
-            // Reset gyro reference after obstacle avoidance
-            initialYaw = getGyroYaw();
+            setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
             continue;
           }
         } else {
@@ -225,40 +206,14 @@ void moveForwardWithObstacleCheck(float distanceCm) {
           return; // Exit the function
         }
       }
-      lastGyroCheck = millis();
+      lastObstacleCheck = millis();
     }
-    
-    // Get current gyro reading and calculate error
-    currentYaw = getGyroYaw();
-    yawError = currentYaw - initialYaw;
-    
-    // Apply gyro correction to maintain straight line
-    int leftSpeed = MOTOR_SPEED;
-    int rightSpeed = MOTOR_SPEED;
-    
-    // Simple proportional correction
-    if (yawError > 2.0) { // Robot turning right, slow down left motor
-      leftSpeed = MOTOR_SPEED - (int)(yawError * 5);
-      if (leftSpeed < 0) leftSpeed = 0;
-    } else if (yawError < -2.0) { // Robot turning left, slow down right motor
-      rightSpeed = MOTOR_SPEED - (int)(-yawError * 5);
-      if (rightSpeed < 0) rightSpeed = 0;
-    }
-    
-    // Set motor speeds with gyro correction
-    setMotorSpeed(leftSpeed, rightSpeed);
     
     // Run stepper motors
     leftStepper.runSpeed();
     rightStepper.runSpeed();
     
-    // Print gyro data for debugging
-    Serial.print("Yaw: "); Serial.print(currentYaw, 1);
-    Serial.print(" Error: "); Serial.print(yawError, 1);
-    Serial.print(" L:"); Serial.print(leftSpeed);
-    Serial.print(" R:"); Serial.println(rightSpeed);
-    
-    delay(50); // Small delay for gyro reading stability
+    delay(50); // Small delay for stability
   }
   
   // Stop after the time has elapsed
@@ -267,32 +222,26 @@ void moveForwardWithObstacleCheck(float distanceCm) {
 }
 
 /**
- * Turns the robot right by a specified angle using gyro-based turning.
+ * Turns the robot right by a specified angle using time-based turning.
  * @param targetAngle The angle in degrees to turn.
  */
 void turnRight(float targetAngle) {
   Serial.print("Turning right "); Serial.print(targetAngle); Serial.println(" degrees");
   
-  // Get initial gyro reading
-  float initialYaw = getGyroYaw();
-  float targetYaw = initialYaw + targetAngle;
-  float currentYaw = initialYaw;
+  // Calculate turn time based on angle (approximate)
+  // Assuming 90 degrees takes about 2 seconds at TURN_SPEED
+  float turnTimeSeconds = (targetAngle / 90.0) * 2.0;
+  long turnTimeMillis = turnTimeSeconds * 1000;
   
   // Start turning: right motor backward, left motor forward
   setMotorSpeed(TURN_SPEED, -TURN_SPEED);
   
-  while (currentYaw < targetYaw - 1.0) { // Allow 1 degree tolerance
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < turnTimeMillis) {
     // Run stepper motors
     leftStepper.runSpeed();
     rightStepper.runSpeed();
-    
-    // Get current gyro reading
-    currentYaw = getGyroYaw();
-    
-    // Print gyro data for debugging
-    Serial.print("Turning - Current: "); Serial.print(currentYaw, 1);
-    Serial.print(" Target: "); Serial.print(targetYaw, 1);
-    Serial.print(" Remaining: "); Serial.println(targetYaw - currentYaw, 1);
     
     delay(50);
   }
@@ -330,32 +279,26 @@ bool avoidObstacle() {
 }
 
 /**
- * Turns the robot left by a specified angle using gyro-based turning.
+ * Turns the robot left by a specified angle using time-based turning.
  * @param targetAngle The angle in degrees to turn.
  */
 void turnLeft(float targetAngle) {
   Serial.print("Turning left "); Serial.print(targetAngle); Serial.println(" degrees");
   
-  // Get initial gyro reading
-  float initialYaw = getGyroYaw();
-  float targetYaw = initialYaw - targetAngle; // Negative for left turn
-  float currentYaw = initialYaw;
+  // Calculate turn time based on angle (approximate)
+  // Assuming 90 degrees takes about 2 seconds at TURN_SPEED
+  float turnTimeSeconds = (targetAngle / 90.0) * 2.0;
+  long turnTimeMillis = turnTimeSeconds * 1000;
   
   // Start turning: left motor backward, right motor forward
   setMotorSpeed(-TURN_SPEED, TURN_SPEED);
   
-  while (currentYaw > targetYaw + 1.0) { // Allow 1 degree tolerance
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < turnTimeMillis) {
     // Run stepper motors
     leftStepper.runSpeed();
     rightStepper.runSpeed();
-    
-    // Get current gyro reading
-    currentYaw = getGyroYaw();
-    
-    // Print gyro data for debugging
-    Serial.print("Turning Left - Current: "); Serial.print(currentYaw, 1);
-    Serial.print(" Target: "); Serial.print(targetYaw, 1);
-    Serial.print(" Remaining: "); Serial.println(currentYaw - targetYaw, 1);
     
     delay(50);
   }
@@ -660,91 +603,6 @@ bool checkI2CConnection() {
     Serial.println(BMP180_ADDR, HEX);
     return false;
   }
-}
-
-/**
- * Initializes the MPU6050 (Gyro) sensor.
- * @return True if successful, false otherwise.
- */
-bool initializeMPU6050() {
-  Wire.beginTransmission(MPU6050_ADDR);
-  if (Wire.endTransmission() == 0) {
-    Serial.print("MPU6050 found at address 0x");
-    Serial.println(MPU6050_ADDR, HEX);
-    return true;
-  } else {
-    Serial.print("MPU6050 not found at address 0x");
-    Serial.println(MPU6050_ADDR, HEX);
-    return false;
-  }
-}
-
-/**
- * Gets the current yaw angle from the gyro sensor.
- * @return Current yaw angle in degrees.
- */
-float getGyroYaw() {
-  // Read gyro data from MPU6050
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(0x3B); // Start with register 0x3B (ACCEL_XOUT_H)
-  Wire.endTransmission(false);
-  Wire.requestFrom((uint8_t)MPU6050_ADDR, (uint8_t)14, (uint8_t)true);
-  
-  if (Wire.available() >= 14) {
-    int16_t ax = Wire.read() << 8 | Wire.read();
-    int16_t ay = Wire.read() << 8 | Wire.read();
-    int16_t az = Wire.read() << 8 | Wire.read();
-    int16_t gx = Wire.read() << 8 | Wire.read();
-    int16_t gy = Wire.read() << 8 | Wire.read();
-    int16_t gz = Wire.read() << 8 | Wire.read();
-    
-    // Convert gyro reading to degrees per second
-    float gyroZ = gz / 131.0; // MPU6050 sensitivity for ±250°/s range
-    
-    // Simple integration for yaw (in a real application, you'd use a proper filter)
-    static float yaw = 0;
-    static unsigned long lastTime = 0;
-    static bool firstReading = true;
-    unsigned long currentTime = millis();
-    
-    if (firstReading) {
-      lastTime = currentTime;
-      firstReading = false;
-      return 0; // Return 0 for first reading
-    }
-    
-    if (lastTime > 0) {
-      float dt = (currentTime - lastTime) / 1000.0; // Convert to seconds
-      yaw += gyroZ * dt;
-    }
-    lastTime = currentTime;
-    
-    return yaw;
-  }
-  
-  return 0; // Return 0 if reading failed
-}
-
-/**
- * Resets the gyro yaw to zero.
- */
-void resetGyroYaw() {
-  Serial.println("Resetting gyro yaw to zero...");
-  
-  // Reset the static variables in getGyroYaw function
-  // This is a simple approach - in a real application you'd use a proper filter
-  static float yaw = 0;
-  static unsigned long lastTime = 0;
-  static bool firstReading = true;
-  
-  // Reset the static variables
-  yaw = 0;
-  lastTime = 0;
-  firstReading = true;
-  
-  // Small delay to let gyro stabilize
-  delay(100);
-  Serial.println("Gyro yaw reset complete.");
 }
 
 /**
