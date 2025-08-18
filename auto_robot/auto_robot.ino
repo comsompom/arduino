@@ -76,26 +76,58 @@ void setup() {
   
   // Initialize I2C communication
   Wire.begin();
+  Serial.println("I2C communication initialized.");
   
   // Initialize buzzer
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
+  Serial.println("Buzzer pin initialized.");
+  
+  // Test buzzer
+  Serial.println("Testing buzzer...");
+  beep(1, 100);
+  delay(500);
+  
+  // Test buzzer with different pattern to verify it's working
+  Serial.println("Testing buzzer pattern...");
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(50);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
+  Serial.println("Buzzer test complete.");
   
   // Initialize sonar sensors
   pinMode(FWD_TRIG_PIN, OUTPUT);
   pinMode(FWD_ECHO_PIN, INPUT);
   pinMode(GND_TRIG_PIN, OUTPUT);
   pinMode(GND_ECHO_PIN, INPUT);
+  Serial.println("Sonar sensors initialized.");
   
   // Initialize stepper motors
+  Serial.println("Initializing stepper motors...");
   leftStepper.setSpeed(50);
   rightStepper.setSpeed(50);
   Serial.println("Stepper motors initialized.");
   
+  // Test stepper motors briefly
+  Serial.println("Testing stepper motors...");
+  for (int i = 0; i < 10; i++) {
+    leftStepper.runSpeed();
+    rightStepper.runSpeed();
+    delay(10);
+  }
+  leftStepper.setSpeed(0);
+  rightStepper.setSpeed(0);
+  Serial.println("Stepper motor test complete.");
+  
   // Print motor shield information
+  Serial.println("Printing motor configuration...");
   printMotorShieldInfo();
   
   // Initial buzzer beep
+  Serial.println("Initial buzzer beep...");
   beep(1, 250);
   delay(1000);
   
@@ -124,6 +156,7 @@ void setup() {
   calibrateDistance();
   
   // Setup completion buzzer beeps
+  Serial.println("Setup completion buzzer...");
   beep(2, 100);
   
   Serial.println("Setup complete. Robot ready to move!");
