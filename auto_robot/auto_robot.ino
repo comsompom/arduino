@@ -73,6 +73,10 @@ void setup() {
   // Initialize serial communication
   Serial.begin(9600);
   Serial.println("Auto Robot Starting...");
+  noTone(13);
+  tone(13, 494, 500);
+  delay(500);
+  noTone(13);
   
   // Initialize I2C communication
   Wire.begin();
@@ -87,6 +91,7 @@ void setup() {
   Serial.println("Testing buzzer...");
   beep(1, 100);
   delay(500);
+  beep(1, 100);
   
   // Test buzzer with different pattern to verify it's working
   Serial.println("Testing buzzer pattern...");
