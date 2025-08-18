@@ -44,7 +44,7 @@ const int GND_TRIG_PIN = 32;
 const int GND_ECHO_PIN = 33;
 
 // Buzzer Pin
-const int BUZZER_PIN = 13; // Changed from A3 to digital pin 13 (built-in LED pin, but can be used for buzzer)
+const int BUZZER_PIN = 13;
 
 //======================================================================
 // CONSTANTS & CALIBRATION
@@ -73,41 +73,16 @@ void setup() {
   // Initialize serial communication
   Serial.begin(9600);
   Serial.println("Auto Robot Starting...");
-  noTone(13);
-  tone(13, 494, 500);
+  
+  // Simple buzzer test - using working tone code
+  noTone(BUZZER_PIN);
+  tone(BUZZER_PIN, 494, 500);
   delay(500);
-  noTone(13);
+  noTone(BUZZER_PIN);
   
   // Initialize I2C communication
   Wire.begin();
   Serial.println("I2C communication initialized.");
-  
-  // Initialize buzzer
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
-  Serial.println("Buzzer pin initialized.");
-  
-  // Test buzzer
-  Serial.println("Testing buzzer...");
-  beep(1, 100);
-  delay(500);
-  beep(1, 100);
-  
-  // Test buzzer with different pattern to verify it's working
-  Serial.println("Testing buzzer pattern...");
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(50);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-  }
-  Serial.println("Buzzer test complete.");
-  
-  // Test buzzer with tone function if available
-  Serial.println("Testing buzzer with tone...");
-  tone(BUZZER_PIN, 1000, 200); // 1kHz for 200ms
-  delay(300);
-  Serial.println("Tone test complete.");
   
   // Initialize sonar sensors
   pinMode(FWD_TRIG_PIN, OUTPUT);
@@ -137,9 +112,9 @@ void setup() {
   Serial.println("Printing motor configuration...");
   printMotorShieldInfo();
   
-  // Initial buzzer beep
+  // Initial buzzer beep using working tone code
   Serial.println("Initial buzzer beep...");
-  beep(1, 250);
+  tone(BUZZER_PIN, 1000, 250);
   delay(1000);
   
   // Initialize and calibrate GY-65 (BMP180)
@@ -147,7 +122,7 @@ void setup() {
   if (!initializeBMP180()) {
     Serial.println("Could not find GY-65 (BMP180). Halting.");
     while (1) {
-      beep(3, 500);
+      tone(BUZZER_PIN, 500, 500);
       delay(2000);
     }
   }
@@ -157,7 +132,7 @@ void setup() {
   if (!initializeMPU6050()) {
     Serial.println("Could not find MPU6050 (Gyro). Halting.");
     while (1) {
-      beep(3, 500);
+      tone(BUZZER_PIN, 500, 500);
       delay(2000);
     }
   }
@@ -166,9 +141,11 @@ void setup() {
   Serial.println("Calibrating distance sensor...");
   calibrateDistance();
   
-  // Setup completion buzzer beeps
+  // Setup completion buzzer beeps using working tone code
   Serial.println("Setup completion buzzer...");
-  beep(2, 100);
+  tone(BUZZER_PIN, 1000, 100);
+  delay(200);
+  tone(BUZZER_PIN, 1000, 100);
   
   Serial.println("Setup complete. Robot ready to move!");
   delay(2000);
@@ -594,22 +571,6 @@ void updateDistance() {
 //======================================================================
 
 /**
- * Creates beeps with the buzzer.
- * @param count Number of beeps.
- * @param durationMs Duration of each beep in milliseconds.
- */
-void beep(int count, int durationMs) {
-  for (int i = 0; i < count; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(durationMs);
-    digitalWrite(BUZZER_PIN, LOW);
-    if (count > 1) {
-      delay(durationMs);
-    }
-  }
-}
-
-/**
  * Controls both motors at a given speed.
  * @param leftSpeed Speed for the left motor (-255 to 255).
  * @param rightSpeed Speed for the right motor (-255 to 255).
@@ -797,4 +758,3 @@ void printMotorShieldInfo() {
   Serial.println("  Right Motor: AF_Stepper(200, 2)");
   Serial.println("=====================================\n");
 }
-
