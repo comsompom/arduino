@@ -1,25 +1,5 @@
 //======================================================================
 // LIBRARIES
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
-     uint8_t requestFrom(int, int, int);
-             ^~~~~~~~~~~
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
-     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
-             ^~~~~~~~~~~
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h: In function 'float readTemperature()':
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
-     uint8_t requestFrom(int, int, int);
-             ^~~~~~~~~~~
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
-     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
-             ^~~~~~~~~~~
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h: In function 'long int readPressure()':
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:69:13: note: candidate 1: uint8_t TwoWire::requestFrom(int, int, int)
-     uint8_t requestFrom(int, int, int);
-             ^~~~~~~~~~~
-/Users/olegbourdo/Library/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries/Wire/src/Wire.h:66:13: note: candidate 2: uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)
-     uint8_t requestFrom(uint8_t, uint8_t, uint8_t);
-             ^~~~~~~~~~~
 //======================================================================
 #include <Wire.h>
 #include <AFMotor.h>
@@ -342,7 +322,7 @@ bool initializeBMP180() {
       continue;
     }
     
-    Wire.requestFrom(addr, 1, true);
+    Wire.requestFrom((uint8_t)addr, (uint8_t)1, (uint8_t)true);
     if (Wire.available()) {
       byte chipId = Wire.read();
       Serial.print("Chip ID: 0x");
@@ -381,7 +361,7 @@ float readTemperature() {
   Wire.beginTransmission(BMP180_ADDR);
   Wire.write(0xF6); // Data register
   Wire.endTransmission(false);
-  Wire.requestFrom(BMP180_ADDR, 2, true);
+  Wire.requestFrom((uint8_t)BMP180_ADDR, (uint8_t)2, (uint8_t)true);
   
   int rawTemp = Wire.read() << 8 | Wire.read();
   float temp = (float)rawTemp / 10.0;
@@ -402,7 +382,7 @@ long readPressure() {
   Wire.beginTransmission(BMP180_ADDR);
   Wire.write(0xF6); // Data register
   Wire.endTransmission(false);
-  Wire.requestFrom(BMP180_ADDR, 3, true);
+  Wire.requestFrom((uint8_t)BMP180_ADDR, (uint8_t)3, (uint8_t)true);
   
   long pressure = Wire.read() << 16 | Wire.read() << 8 | Wire.read();
   pressure >>= 8;
