@@ -81,6 +81,9 @@ void setup() {
   
   // Print motor shield information
   printMotorShieldInfo();
+  
+  // Help identify motor shield
+  identifyMotorShield();
 
   // --- Test Motors ---
   Serial.println("Testing motors...");
@@ -630,6 +633,78 @@ void manualMotorTest() {
   
   Serial.println("Manual motor test complete.");
   Serial.println("If no movement, the pin configuration is incorrect.");
+  
+  // Now test alternative configurations
+  Serial.println("\n=== TESTING ALTERNATIVE CONFIGURATIONS ===");
+  
+  // Test Arduino Motor Shield R3 configuration
+  Serial.println("Testing Arduino Motor Shield R3 (pins 12,13,3,11,8,9)...");
+  testSimpleMotorConfig(12, 13, 3, 11, 8, 9);
+  
+  // Test L298N alternative
+  Serial.println("Testing L298N Alternative (pins 6,7,5,8,9,10)...");
+  testSimpleMotorConfig(6, 7, 5, 8, 9, 10);
+  
+  // Test another common configuration
+  Serial.println("Testing Common Alternative (pins 22,24,2,26,28,3)...");
+  testSimpleMotorConfig(22, 24, 2, 26, 28, 3);
+  
+  Serial.println("All motor tests complete. Tell me which one worked!");
+}
+
+/**
+ * Simple motor configuration test.
+ */
+void testSimpleMotorConfig(int leftIn1, int leftIn2, int leftEna, int rightIn3, int rightIn4, int rightEnb) {
+  // Setup pins
+  pinMode(leftIn1, OUTPUT);
+  pinMode(leftIn2, OUTPUT);
+  pinMode(leftEna, OUTPUT);
+  pinMode(rightIn3, OUTPUT);
+  pinMode(rightIn4, OUTPUT);
+  pinMode(rightEnb, OUTPUT);
+  
+  // Stop motors
+  digitalWrite(leftIn1, LOW);
+  digitalWrite(leftIn2, LOW);
+  analogWrite(leftEna, 0);
+  digitalWrite(rightIn3, LOW);
+  digitalWrite(rightIn4, LOW);
+  analogWrite(rightEnb, 0);
+  
+  delay(1000);
+  
+  // Test left motor
+  Serial.print("  Testing left motor (pins ");
+  Serial.print(leftIn1);
+  Serial.print(",");
+  Serial.print(leftIn2);
+  Serial.print(",");
+  Serial.print(leftEna);
+  Serial.println(")...");
+  
+  digitalWrite(leftIn1, HIGH);
+  digitalWrite(leftIn2, LOW);
+  analogWrite(leftEna, 255); // Full speed
+  delay(2000);
+  analogWrite(leftEna, 0);
+  delay(1000);
+  
+  // Test right motor
+  Serial.print("  Testing right motor (pins ");
+  Serial.print(rightIn3);
+  Serial.print(",");
+  Serial.print(rightIn4);
+  Serial.print(",");
+  Serial.print(rightEnb);
+  Serial.println(")...");
+  
+  digitalWrite(rightIn3, HIGH);
+  digitalWrite(rightIn4, LOW);
+  analogWrite(rightEnb, 255); // Full speed
+  delay(2000);
+  analogWrite(rightEnb, 0);
+  delay(1000);
 }
 
 /**
@@ -746,4 +821,45 @@ void printMotorShieldInfo() {
   Serial.print(", ENB=");
   Serial.println(MOTOR_RIGHT_ENB);
   Serial.println("=====================================\n");
+}
+
+/**
+ * Helps identify the motor shield type.
+ */
+void identifyMotorShield() {
+  Serial.println("\n=== MOTOR SHIELD IDENTIFICATION ===");
+  Serial.println("Please move the robot forward and backward a few times.");
+  Serial.println("I will help identify the motor shield type.");
+  
+  // Test forward movement
+  Serial.println("Testing forward movement...");
+  setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
+  delay(2000);
+  stopMotors();
+  delay(1000);
+  
+  // Test backward movement
+  Serial.println("Testing backward movement...");
+  setMotorSpeed(-MOTOR_SPEED, -MOTOR_SPEED);
+  delay(2000);
+  stopMotors();
+  delay(1000);
+  
+  // Test turn right
+  Serial.println("Testing turn right...");
+  setMotorSpeed(TURN_SPEED, -TURN_SPEED);
+  delay(1000);
+  stopMotors();
+  delay(1000);
+  
+  // Test turn left
+  Serial.println("Testing turn left...");
+  setMotorSpeed(-TURN_SPEED, TURN_SPEED);
+  delay(1000);
+  stopMotors();
+  delay(1000);
+  
+  Serial.println("=== MOTOR SHIELD IDENTIFICATION COMPLETE ===");
+  Serial.println("Based on the movements, I can help identify the motor shield.");
+  Serial.println("Please let me know which movements worked and which didn't.");
 }
