@@ -2,17 +2,18 @@
 // LIBRARIES
 //======================================================================
 #include <Wire.h>
-#include <Adafruit_MotorShield.h>
 
 //======================================================================
 // PIN & OBJECT DEFINITIONS
 //======================================================================
-// Create the motor shield object with the default I2C address
-Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+// Motor control pins (replace with your actual motor shield pins)
+const int LEFT_MOTOR_IN1 = 2;   // Left motor direction 1
+const int LEFT_MOTOR_IN2 = 3;   // Left motor direction 2
+const int LEFT_MOTOR_ENA = 9;   // Left motor speed control (PWM)
 
-// Select which shield connections to use for the motors
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);  // M1
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(3); // M3
+const int RIGHT_MOTOR_IN3 = 4;  // Right motor direction 1
+const int RIGHT_MOTOR_IN4 = 5;  // Right motor direction 2
+const int RIGHT_MOTOR_ENB = 10; // Right motor speed control (PWM)
 
 // GY-65 (BMP180) I2C address
 #define BMP180_ADDR 0x77
@@ -57,33 +58,21 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   beep(1, 250); // Beep once on power-up
 
-  // --- Initialize I2C first ---
+  // --- Initialize I2C for GY-65 ---
   Wire.begin();
-  Serial.println("I2C initialized.");
+  Serial.println("I2C initialized for GY-65 sensor.");
 
-  // --- Scan I2C bus for debugging ---
-  scanI2C();
-
-  // --- Motor Shield Setup ---
-  Serial.println("Attempting to connect to Motor Shield...");
+  // --- Motor Pin Setup ---
+  pinMode(LEFT_MOTOR_IN1, OUTPUT);
+  pinMode(LEFT_MOTOR_IN2, OUTPUT);
+  pinMode(LEFT_MOTOR_ENA, OUTPUT);
+  pinMode(RIGHT_MOTOR_IN3, OUTPUT);
+  pinMode(RIGHT_MOTOR_IN4, OUTPUT);
+  pinMode(RIGHT_MOTOR_ENB, OUTPUT);
   
-  // Test motor shield connection first
-  if (!testMotorShield()) {
-    Serial.println("Motor Shield not responding on I2C bus.");
-    Serial.println("Please check connections and try again.");
-    while (1);
-  }
-  
-  if (!AFMS.begin()) {
-    Serial.println("Could not find Motor Shield. Halting.");
-    Serial.println("Please check:");
-    Serial.println("1. Motor Shield is properly connected to Arduino");
-    Serial.println("2. I2C pins (SDA=20, SCL=21 on Mega 2560) are not shorted");
-    Serial.println("3. Power supply is adequate");
-    Serial.println("4. Motor Shield address jumpers (if any) are set correctly");
-    while (1);
-  }
-  Serial.println("Motor Shield found and initialized successfully.");
+  // Initialize motors to stop
+  stopMotors();
+  Serial.println("Motor pins configured.");
 
   // --- Sonar Pin Setup ---
   pinMode(FWD_TRIG_PIN, OUTPUT);
@@ -403,89 +392,6 @@ void updateDistance() {
 //======================================================================
 
 /**
- * Scans I2C bus for connected devices.
- */
-void scanI2C() {
-  Serial.println("Scanning I2C bus...");
-  byte error, address;
-  int nDevices = 0;
-  
-  for(address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address < 16) {
-        Serial.print("0");
-      }
-      Serial.println(address, HEX);
-      nDevices++;
-    }
-  }
-  
-  if (nDevices == 0) {
-    Serial.println("No I2C devices found");
-  } else {
-    Serial.print("Found ");
-    Serial.print(nDevices);
-    Serial.println(" I2C device(s)");
-  }
-}
-
-/**
- * Tests motor shield connection.
- * @return True if motor shield is responding, false otherwise.
- */
-bool testMotorShield() {
-  // Try to communicate with the motor shield
-  Wire.beginTransmission(0x60); // Adafruit Motor Shield default address
-  byte error = Wire.endTransmission();
-  
-  if (error == 0) {
-    Serial.println("Motor Shield I2C address (0x60) responding");
-    return true;
-  } else {
-    Serial.print("Motor Shield I2C error: ");
-    Serial.println(error);
-    return false;
-  }
-}
-
-/**
- * Controls both motors at a given speed.
- * @param leftSpeed Speed for the left motor (-255 to 255).
- * @param rightSpeed Speed for the right motor (-255 to 255).
- */
-void setMotorSpeed(int leftSpeed, int rightSpeed) {
-  // Control Left Motor
-  if (leftSpeed >= 0) {
-    leftMotor->setSpeed(leftSpeed);
-    leftMotor->run(FORWARD);
-  } else {
-    leftMotor->setSpeed(-leftSpeed);
-    leftMotor->run(BACKWARD);
-  }
-
-  // Control Right Motor
-  if (rightSpeed >= 0) {
-    rightMotor->setSpeed(rightSpeed);
-    rightMotor->run(FORWARD);
-  } else {
-    rightMotor->setSpeed(-rightSpeed);
-    rightMotor->run(BACKWARD);
-  }
-}
-
-/**
- * Stops both motors.
- */
-void stopMotors() {
-  leftMotor->run(RELEASE);
-  rightMotor->run(RELEASE);
-}
-
-/**
  * Creates beeps with the buzzer.
  * @param count Number of beeps.
  * @param durationMs Duration of each beep in milliseconds.
@@ -499,4 +405,46 @@ void beep(int count, int durationMs) {
       delay(durationMs);
     }
   }
+}
+
+/**
+ * Controls both motors at a given speed.
+ * @param leftSpeed Speed for the left motor (-255 to 255).
+ * @param rightSpeed Speed for the right motor (-255 to 255).
+ */
+void setMotorSpeed(int leftSpeed, int rightSpeed) {
+  // Control Left Motor
+  if (leftSpeed >= 0) {
+    digitalWrite(LEFT_MOTOR_IN1, HIGH);
+    digitalWrite(LEFT_MOTOR_IN2, LOW);
+    analogWrite(LEFT_MOTOR_ENA, leftSpeed);
+  } else {
+    digitalWrite(LEFT_MOTOR_IN1, LOW);
+    digitalWrite(LEFT_MOTOR_IN2, HIGH);
+    analogWrite(LEFT_MOTOR_ENA, -leftSpeed);
+  }
+
+  // Control Right Motor
+  if (rightSpeed >= 0) {
+    digitalWrite(RIGHT_MOTOR_IN3, HIGH);
+    digitalWrite(RIGHT_MOTOR_IN4, LOW);
+    analogWrite(RIGHT_MOTOR_ENB, rightSpeed);
+  } else {
+    digitalWrite(RIGHT_MOTOR_IN3, LOW);
+    digitalWrite(RIGHT_MOTOR_IN4, HIGH);
+    analogWrite(RIGHT_MOTOR_ENB, -rightSpeed);
+  }
+}
+
+/**
+ * Stops both motors.
+ */
+void stopMotors() {
+  digitalWrite(LEFT_MOTOR_IN1, LOW);
+  digitalWrite(LEFT_MOTOR_IN2, LOW);
+  analogWrite(LEFT_MOTOR_ENA, 0);
+  
+  digitalWrite(RIGHT_MOTOR_IN3, LOW);
+  digitalWrite(RIGHT_MOTOR_IN4, LOW);
+  analogWrite(RIGHT_MOTOR_ENB, 0);
 }
