@@ -192,6 +192,9 @@ void loop() {
   Serial.println("=== MOVEMENT PLAN COMPLETE ===");
   stopMotors();
   
+  // Play mission completion melody
+  playMissionCompleteMelody();
+  
   // Final ADXL345 position report
   if (adxl345_found) {
     Serial.println("\n=== FINAL ADXL345 POSITION REPORT ===");
@@ -202,6 +205,41 @@ void loop() {
     Serial.println(" meters");
     Serial.println("=====================================");
   }
+}
+
+//======================================================================
+// AUDIO FEEDBACK FUNCTIONS
+//======================================================================
+
+/**
+ * Plays a single short beep for obstacle detection.
+ */
+void playObstacleBeep() {
+  Serial.println("! OBSTACLE BEEP SIGNAL !");
+  tone(BUZZER_PIN, 800, 150); // 800Hz for 150ms (short beep)
+  delay(150);
+  noTone(BUZZER_PIN);
+}
+
+/**
+ * Plays two long beeps for ground/cliff detection.
+ */
+void playGroundBeep() {
+  Serial.println("! GROUND/CLIFF BEEP SIGNAL !");
+  for (int i = 0; i < 2; i++) {
+    tone(BUZZER_PIN, 600, 500); // 600Hz for 500ms (long beep)
+    delay(500);
+    noTone(BUZZER_PIN);
+    delay(200); // Pause between beeps
+  }
+}
+
+/**
+ * Plays the Caribbean Pirates melody for mission completion.
+ */
+void playMissionCompleteMelody() {
+  Serial.println("=== MISSION COMPLETE - PLAYING CELEBRATION MELODY ===");
+  playCaribbeanPiratesMelody();
 }
 
 //======================================================================
@@ -340,6 +378,7 @@ void moveForwardDistance(float targetDistanceMeters) {
     
     if (obstacleDetected) {
       Serial.println("! FORWARD OBSTACLE DETECTED!");
+      playObstacleBeep(); // Play obstacle beep signal
       stopMotors();
       if (avoidObstacle()) {
         // Resume movement after avoidance
@@ -361,6 +400,7 @@ void moveForwardDistance(float targetDistanceMeters) {
     
     if (holeDetected) {
       Serial.println("! HOLE/CLIFF DETECTED! No ground in front!");
+      playGroundBeep(); // Play ground/cliff beep signal
       stopMotors();
       if (avoidObstacle()) {
         // Resume movement after avoidance
@@ -553,6 +593,7 @@ bool avoidObstacle() {
   } else {
     // No ground on either side - dangerous situation
     Serial.println("! DANGER! No ground on either side!");
+    playGroundBeep(); // Play ground/cliff beep signal for dangerous situation
     Serial.println("Stopping robot for safety");
     stopMotors();
     return false;
