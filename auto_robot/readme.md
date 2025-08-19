@@ -140,6 +140,100 @@ Acceleration → Velocity → Position
 - **Setup Complete:** 1000Hz, 100ms (2x)
 - **Caribbean Pirates Melody:** Full theme song
 
+## 🔊 Audio Feedback System
+
+### Beep Signal Meanings
+
+The robot uses distinct audio signals to communicate different events and hazards to the user:
+
+#### 1. **Obstacle Detection Signal**
+- **Pattern:** One short beep
+- **Frequency:** 800Hz
+- **Duration:** 150ms
+- **Meaning:** Forward obstacle detected
+- **Action:** Robot stops and initiates avoidance maneuver
+- **Audio:** `BEEP` (quick, short alert)
+
+#### 2. **Ground/Cliff Detection Signal**
+- **Pattern:** Two long beeps
+- **Frequency:** 600Hz
+- **Duration:** 500ms per beep with 200ms pause
+- **Meaning:** No ground detected (hole/cliff ahead)
+- **Action:** Robot stops and checks sides for safe ground
+- **Audio:** `BEEP---BEEP` (serious warning)
+
+#### 3. **Setup Completion Signal**
+- **Pattern:** Two short beeps
+- **Frequency:** 1000Hz
+- **Duration:** 100ms each with 200ms pause
+- **Meaning:** Robot initialization complete
+- **Action:** Robot ready to begin movement sequence
+- **Audio:** `beep-beep` (ready signal)
+
+#### 4. **Mission Completion Signal**
+- **Pattern:** Full Caribbean Pirates melody
+- **Duration:** ~15-20 seconds
+- **Meaning:** All movement steps completed successfully
+- **Action:** Robot stops and reports final position
+- **Audio:** 🎵 "He's a Pirate" theme song 🎵
+
+### Audio Signal Hierarchy
+
+#### **Priority Levels:**
+1. **High Priority:** Ground/Cliff detection (2 long beeps)
+   - Indicates dangerous situation requiring immediate attention
+   - Longest audio signal for maximum awareness
+
+2. **Medium Priority:** Obstacle detection (1 short beep)
+   - Indicates obstacle that needs avoidance
+   - Quick alert for immediate response
+
+3. **Low Priority:** Setup/Mission completion
+   - Status indicators for robot state
+   - Celebration for successful completion
+
+### Audio Response Times
+
+#### **Immediate Response (< 100ms):**
+- Obstacle detection beep
+- Ground detection beeps
+
+#### **Status Indicators:**
+- Setup completion: After initialization
+- Mission completion: After all movements
+
+### User Experience
+
+#### **Clear Communication:**
+- ✅ **Distinct frequencies:** 600Hz vs 800Hz vs 1000Hz
+- ✅ **Different durations:** Short vs long beeps
+- ✅ **Pattern recognition:** Single vs multiple beeps
+- ✅ **Context awareness:** Setup vs operational vs completion
+
+#### **Safety Enhancement:**
+- ✅ **Immediate hazard alerts** for obstacles and ground issues
+- ✅ **Clear audio hierarchy** for different event types
+- ✅ **Non-verbal communication** for robot status
+- ✅ **User-friendly feedback** system
+
+### Audio Signal Examples
+
+#### **Normal Operation:**
+```
+Robot starts → Setup beeps → Movement → No audio during normal travel
+```
+
+#### **Hazard Detection:**
+```
+Obstacle ahead → BEEP (150ms) → Avoidance maneuver
+No ground ahead → BEEP---BEEP (1.4s) → Safety check
+```
+
+#### **Mission Completion:**
+```
+All movements done → 🎵 Caribbean Pirates Melody 🎵 → Final report
+```
+
 ## 🔧 Technical Specifications
 
 ### Libraries Used
@@ -151,19 +245,22 @@ Acceleration → Velocity → Position
 ### Key Functions
 - `initializeADXL345()` - Accelerometer setup and detection
 - `calibrateADXL345(int samples)` - 400-sample calibration
-- `moveForwardWithObstacleCheck()` - Forward movement with obstacle detection
-- `moveForwardShort()` - Short forward movement (50cm)
-- `turnRight()` / `turnLeft()` - 90° turns
+- `moveForwardDistance()` - Forward movement with obstacle detection
+- `moveBackwardDistance()` - Backward movement
+- `turnRightAngle()` / `turnLeftAngle()` - Angle-based turns
 - `avoidObstacle()` - Smart obstacle avoidance
 - `checkLeftSideGround()` / `checkRightSideGround()` - Side ground detection
 - `updateADXL345Position()` - Real-time position tracking
 - `playCaribbeanPiratesMelody()` - Audio feedback
+- `playObstacleBeep()` - Obstacle detection audio
+- `playGroundBeep()` - Ground/cliff detection audio
 
 ### Safety Features
 - **Immediate Stop:** On obstacle or hole detection
 - **Ground Verification:** Before choosing avoidance direction
 - **Position Monitoring:** Continuous tracking for navigation
 - **Error Handling:** Graceful degradation if sensors fail
+- **Audio Alerts:** Immediate feedback for hazards
 
 ## 🎯 Movement Algorithm
 
@@ -171,35 +268,38 @@ Acceleration → Velocity → Position
 ```
 1. Update ADXL345 position tracking
 2. Reset position for new sequence
-3. Execute 5-step movement sequence
+3. Execute user-defined movement plan
 4. Report final position and distance
-5. Stop motors
+5. Play mission completion melody
+6. Stop motors
 ```
 
 ### Obstacle Response Flow
 ```
 1. Continuous sensor monitoring
 2. Obstacle/hole detection
-3. Immediate motor stop
-4. Side ground assessment
-5. Direction decision
-6. Avoidance execution
-7. Movement resumption
+3. Audio alert (beep signal)
+4. Immediate motor stop
+5. Side ground assessment
+6. Direction decision
+7. Avoidance execution
+8. Movement resumption
 ```
 
 ## 📈 Performance Metrics
 
 ### Timing
-- **Total Sequence Time:** ~15-20 seconds
+- **Total Sequence Time:** Variable (based on movement plan)
 - **Setup Time:** ~10-15 seconds (including calibration)
 - **Obstacle Response Time:** < 100ms
 - **Position Update Rate:** 20Hz (50ms intervals)
+- **Audio Response Time:** Immediate (< 100ms)
 
 ### Accuracy
 - **Position Tracking:** ±0.1m (with ADXL345 calibration)
 - **Obstacle Detection:** ±2cm (HC-SR04 accuracy)
 - **Ground Detection:** ±2cm (HC-SR04 accuracy)
-- **Turn Precision:** ±5° (time-based)
+- **Turn Precision:** ±5° (ADXL345-based)
 
 ## 🚨 Troubleshooting
 
@@ -208,12 +308,14 @@ Acceleration → Velocity → Position
 2. **Motors Not Moving:** Verify motor shield connections
 3. **Sonar Errors:** Check trigger/echo pin connections
 4. **Buzzer Issues:** Verify pin 13 connection
+5. **No Audio Feedback:** Check buzzer wiring and pin assignment
 
 ### Debug Output
 - **Serial Monitor:** 9600 baud for real-time status
 - **Position Reports:** X, Y, Z coordinates during movement
 - **Sensor Readings:** Forward and ground distances
 - **Calibration Progress:** ADXL345 setup status
+- **Audio Signal Logs:** Beep event notifications
 
 ## 🔄 Future Enhancements
 
@@ -223,12 +325,14 @@ Acceleration → Velocity → Position
 - **GPS Module:** For absolute positioning
 - **Camera Module:** For visual obstacle detection
 - **Wireless Communication:** For remote monitoring
+- **LED Indicators:** Visual status feedback
 
 ### Code Optimization
 - **PID Control:** For smoother motor control
 - **Kalman Filtering:** For improved position accuracy
 - **Path Planning:** For complex navigation
 - **Machine Learning:** For adaptive behavior
+- **Audio Patterns:** More sophisticated alert systems
 
 ---
 
@@ -244,4 +348,4 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 **Created by:** Autonomous Robot Development Team  
 **Last Updated:** 2024  
-**Version:** 1.0
+**Version:** 1.1
