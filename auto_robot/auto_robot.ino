@@ -172,23 +172,42 @@ void loop() {
   Serial.print("Total movements in plan: ");
   Serial.println(MOVEMENT_PLAN_SIZE);
   
-  for (int i = 0; i < MOVEMENT_PLAN_SIZE; i++) {
+  // Track completion status
+  bool missionCompleted = false;
+  int currentStep = 0;
+  
+  // Keep trying to complete the mission until all steps are done
+  while (!missionCompleted && currentStep < MOVEMENT_PLAN_SIZE) {
     Serial.print("Step ");
-    Serial.print(i + 1);
+    Serial.print(currentStep + 1);
     Serial.print(": ");
-    Serial.println(movementPlan[i]);
+    Serial.println(movementPlan[currentStep]);
     
-    // Execute the current movement command
-    if (!executeMovementCommand(movementPlan[i])) {
-      Serial.println("Movement failed! Stopping sequence.");
-      stopMotors();
-      return;
+    // Execute the current movement command with retry logic
+    if (executeMovementCommandWithRetry(movementPlan[currentStep])) {
+      // Step completed successfully, move to next step
+      currentStep++;
+      Serial.print("Step ");
+      Serial.print(currentStep);
+      Serial.println(" completed successfully!");
+    } else {
+      // Step failed, but we continue trying (obstacle avoidance will handle it)
+      Serial.print("Step ");
+      Serial.print(currentStep + 1);
+      Serial.println(" encountered obstacles, continuing...");
+      // Don't increment currentStep - we'll retry this step
+    }
+    
+    // Check if we've completed all steps
+    if (currentStep >= MOVEMENT_PLAN_SIZE) {
+      missionCompleted = true;
     }
     
     // Small delay between movements
     delay(500);
   }
   
+  // Mission completed
   Serial.println("=== MOVEMENT PLAN COMPLETE ===");
   stopMotors();
   
@@ -204,6 +223,16 @@ void loop() {
     Serial.print(getADXL345Distance());
     Serial.println(" meters");
     Serial.println("=====================================");
+  }
+  
+  // Mission is complete - stop permanently
+  Serial.println("=== MISSION ACCOMPLISHED - ROBOT STOPPING PERMANENTLY ===");
+  Serial.println("Robot has completed its mission and will not restart.");
+  Serial.println("To restart, power cycle the Arduino.");
+  
+  // Infinite loop to prevent restart
+  while (true) {
+    delay(1000); // Keep the robot stopped permanently
   }
 }
 
@@ -247,9 +276,77 @@ void playMissionCompleteMelody() {
 //======================================================================
 
 /**
+ * Executes a movement command with retry logic to ensure completion.
+ * The robot will go around obstacles to reach the goal.
+ * @param command The movement command string (e.g., "FWD_200", "RT_90", etc.)
+ * @return True if movement was completed successfully, false if still trying
+ */
+bool executeMovementCommandWithRetry(String command) {
+  Serial.print("Executing command with retry: ");
+  Serial.println(command);
+  
+  // Parse the command
+  if (command.startsWith("FWD_")) {
+    // Forward movement
+    String distanceStr = command.substring(4); // Remove "FWD_"
+    float distanceCm = distanceStr.toFloat();
+    float distanceM = distanceCm / 100.0; // Convert cm to meters
+    
+    Serial.print("Moving forward ");
+    Serial.print(distanceCm);
+    Serial.println(" cm");
+    
+    return moveForwardDistanceWithRetry(distanceM);
+    
+  } else if (command.startsWith("BKWD_")) {
+    // Backward movement
+    String distanceStr = command.substring(5); // Remove "BKWD_"
+    float distanceCm = distanceStr.toFloat();
+    float distanceM = distanceCm / 100.0; // Convert cm to meters
+    
+    Serial.print("Moving backward ");
+    Serial.print(distanceCm);
+    Serial.println(" cm");
+    
+    return moveBackwardDistanceWithRetry(distanceM);
+    
+  } else if (command.startsWith("LT_")) {
+    // Left turn
+    String angleStr = command.substring(3); // Remove "LT_"
+    float angle = angleStr.toFloat();
+    
+    Serial.print("Turning left ");
+    Serial.print(angle);
+    Serial.println(" degrees");
+    
+    turnLeftAngle(angle);
+    return true; // Turns are usually completed without obstacles
+    
+  } else if (command.startsWith("RT_")) {
+    // Right turn
+    String angleStr = command.substring(3); // Remove "RT_"
+    float angle = angleStr.toFloat();
+    
+    Serial.print("Turning right ");
+    Serial.print(angle);
+    Serial.println(" degrees");
+    
+    turnRightAngle(angle);
+    return true; // Turns are usually completed without obstacles
+    
+  } else {
+    // Unknown command
+    Serial.print("Unknown command: ");
+    Serial.println(command);
+    return false;
+  }
+}
+
+/**
  * Executes a movement command from the movement plan.
  * @param command The movement command string (e.g., "FWD_200", "RT_90", etc.)
  * @return True if movement was successful, false if failed
+ * @deprecated Use executeMovementCommandWithRetry() for obstacle avoidance
  */
 bool executeMovementCommand(String command) {
   Serial.print("Executing command: ");
@@ -315,8 +412,143 @@ bool executeMovementCommand(String command) {
 }
 
 /**
+ * Moves the robot forward for a specific distance with retry logic.
+ * The robot will go around obstacles until it reaches the target distance.
+ * @param targetDistanceMeters The distance to travel in meters.
+ * @return True if the target distance was reached, false if still trying
+ */
+bool moveForwardDistanceWithRetry(float targetDistanceMeters) {
+  Serial.print("Moving forward with retry ");
+  Serial.print(targetDistanceMeters);
+  Serial.println(" meters...");
+  
+  // Reset position tracking for this movement
+  if (adxl345_found) {
+    resetADXL345Position();
+  }
+  
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Start forward movement
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  
+  unsigned long startTime = millis();
+  float distanceTraveled = 0.0;
+  unsigned long lastObstacleTime = 0;
+  const unsigned long OBSTACLE_RETRY_DELAY = 5000; // 5 seconds between obstacle attempts
+  
+  while (distanceTraveled < targetDistanceMeters) {
+    // Update ADXL345 position tracking
+    updateADXL345Position();
+    
+    // Get current distance traveled
+    if (adxl345_found) {
+      distanceTraveled = getADXL345Distance();
+    } else {
+      // Fallback to time-based if ADXL345 not available
+      unsigned long elapsedTime = millis() - startTime;
+      distanceTraveled = (elapsedTime / 1000.0) * 0.4; // Assume 0.4 m/s speed
+    }
+    
+    // Check for forward obstacles
+    int forwardDistance = getForwardDistance();
+    Serial.print("Forward distance: ");
+    Serial.print(forwardDistance);
+    Serial.print(" cm, Traveled: ");
+    Serial.print(distanceTraveled);
+    Serial.println(" m");
+    
+    // Check for ground/cliff
+    long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+    Serial.print("Ground distance: ");
+    Serial.print(groundDistance);
+    Serial.println(" cm");
+    
+    // Report ADXL345 position if available
+    if (adxl345_found) {
+      Serial.print("ADXL345: ");
+      Serial.println(getADXL345PositionString());
+    }
+    
+    // Check for obstacles or holes
+    bool obstacleDetected = (forwardDistance < OBSTACLE_THRESHOLD_CM);
+    bool holeDetected = (groundDistance > CLIFF_THRESHOLD_CM);
+    
+    if (obstacleDetected || holeDetected) {
+      unsigned long currentTime = millis();
+      
+      // Only handle obstacles if enough time has passed since last attempt
+      if (currentTime - lastObstacleTime > OBSTACLE_RETRY_DELAY) {
+        lastObstacleTime = currentTime;
+        
+        if (obstacleDetected) {
+          Serial.println("! FORWARD OBSTACLE DETECTED!");
+          playObstacleBeep();
+        }
+        
+        if (holeDetected) {
+          Serial.println("! HOLE/CLIFF DETECTED! No ground in front!");
+          playGroundBeep();
+        }
+        
+        stopMotors();
+        
+        // Try to avoid the obstacle
+        if (avoidObstacle()) {
+          // Resume movement after avoidance
+          Serial.println("Resuming forward movement after obstacle avoidance...");
+          motor1.setSpeed(255);
+          motor2.setSpeed(255);
+          motor1.run(FORWARD);
+          motor2.run(FORWARD);
+          
+          // Reset position tracking after avoidance
+          if (adxl345_found) {
+            resetADXL345Position();
+          }
+          startTime = millis();
+        } else {
+          // If avoidance failed, try a different approach
+          Serial.println("Obstacle avoidance failed, trying alternative path...");
+          
+          // Turn around and try going the other way
+          turnRightAngle(180);
+          delay(1000);
+          
+          // Resume movement
+          motor1.setSpeed(255);
+          motor2.setSpeed(255);
+          motor1.run(FORWARD);
+          motor2.run(FORWARD);
+          
+          // Reset position tracking
+          if (adxl345_found) {
+            resetADXL345Position();
+          }
+          startTime = millis();
+        }
+      }
+    }
+    
+    delay(100); // Check every 100ms
+  }
+  
+  // Stop motors after reaching target distance
+  stopMotors();
+  Serial.print("Forward movement complete. Distance traveled: ");
+  Serial.print(distanceTraveled);
+  Serial.println(" meters");
+  
+  return true; // Successfully reached the target distance
+}
+
+/**
  * Moves the robot forward for a specific distance using ADXL345 tracking.
  * @param targetDistanceMeters The distance to travel in meters.
+ * @deprecated Use moveForwardDistanceWithRetry() for obstacle avoidance
  */
 void moveForwardDistance(float targetDistanceMeters) {
   Serial.print("Moving forward ");
@@ -431,8 +663,74 @@ void moveForwardDistance(float targetDistanceMeters) {
 }
 
 /**
+ * Moves the robot backward for a specific distance with retry logic.
+ * @param targetDistanceMeters The distance to travel in meters.
+ * @return True if the target distance was reached, false if still trying
+ */
+bool moveBackwardDistanceWithRetry(float targetDistanceMeters) {
+  Serial.print("Moving backward with retry ");
+  Serial.print(targetDistanceMeters);
+  Serial.println(" meters...");
+  
+  // Reset position tracking for this movement
+  if (adxl345_found) {
+    resetADXL345Position();
+  }
+  
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Start backward movement
+  motor1.run(BACKWARD);
+  motor2.run(BACKWARD);
+  
+  unsigned long startTime = millis();
+  float distanceTraveled = 0.0;
+  
+  while (distanceTraveled < targetDistanceMeters) {
+    // Update ADXL345 position tracking
+    updateADXL345Position();
+    
+    // Get current distance traveled
+    if (adxl345_found) {
+      distanceTraveled = getADXL345Distance();
+    } else {
+      // Fallback to time-based if ADXL345 not available
+      unsigned long elapsedTime = millis() - startTime;
+      distanceTraveled = (elapsedTime / 1000.0) * 0.4; // Assume 0.4 m/s speed
+    }
+    
+    // Check for obstacles behind (using forward sonar as approximation)
+    int forwardDistance = getForwardDistance();
+    Serial.print("Forward distance: ");
+    Serial.print(forwardDistance);
+    Serial.print(" cm, Traveled: ");
+    Serial.print(distanceTraveled);
+    Serial.println(" m");
+    
+    // Report ADXL345 position if available
+    if (adxl345_found) {
+      Serial.print("ADXL345: ");
+      Serial.println(getADXL345PositionString());
+    }
+    
+    delay(100); // Check every 100ms
+  }
+  
+  // Stop motors after reaching target distance
+  stopMotors();
+  Serial.print("Backward movement complete. Distance traveled: ");
+  Serial.print(distanceTraveled);
+  Serial.println(" meters");
+  
+  return true; // Successfully reached the target distance
+}
+
+/**
  * Moves the robot backward for a specific distance using ADXL345 tracking.
  * @param targetDistanceMeters The distance to travel in meters.
+ * @deprecated Use moveBackwardDistanceWithRetry() for obstacle avoidance
  */
 void moveBackwardDistance(float targetDistanceMeters) {
   Serial.print("Moving backward ");
