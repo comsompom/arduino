@@ -3,32 +3,22 @@
 //======================================================================
 #include <Wire.h>
 #include <AFMotor.h>
-#include <AccelStepper.h>
 
-//======================================================================
-// PIN & OBJECT DEFINITIONS
-//======================================================================
-// Motor control using AFMotor library with stepper motors (working solution)
-AF_Stepper motor1(200, 1);  // Left motor
-AF_Stepper motor2(200, 2);  // Right motor
+// ADXL345 Accelerometer (GY-291)
+#define ADXL345_ADDR 0x53  // ADXL345 I2C address
+#define ADXL345_DEVID 0xE5 // Device ID for ADXL345
 
-// Stepper motor control functions - exactly like test_motor.ino
-void leftForwardStep() {  
-  motor1.onestep(FORWARD, SINGLE);
-}
-void leftBackwardStep() {  
-  motor1.onestep(BACKWARD, SINGLE);
-}
-void rightForwardStep() {  
-  motor2.onestep(FORWARD, SINGLE);
-}
-void rightBackwardStep() {  
-  motor2.onestep(BACKWARD, SINGLE);
-}
+// Motor definitions - using DC motors like in motor_move.ino
+AF_DCMotor motor1(1);  // Left motor on M1
+AF_DCMotor motor2(2);  // Right motor on M2
 
-// Create AccelStepper objects - exactly like test_motor.ino
-AccelStepper leftStepper(leftForwardStep, leftBackwardStep);
-AccelStepper rightStepper(rightForwardStep, rightBackwardStep);
+// ADXL345 Accelerometer variables
+bool adxl345_found = false;
+float adxl345_offset[3] = {0, 0, 0}; // Calibration offsets for X, Y, Z
+float adxl345_position[3] = {0, 0, 0}; // Current position (X, Y, Z)
+float adxl345_velocity[3] = {0, 0, 0}; // Current velocity (X, Y, Z)
+unsigned long last_adxl345_read = 0;
+const unsigned long ADXL345_READ_INTERVAL = 50; // Read every 50ms
 
 // Sonar Pins
 const int FWD_TRIG_PIN = 30;
@@ -73,6 +63,21 @@ void setup() {
   Wire.begin();
   Serial.println("I2C communication initialized.");
   
+  // Initialize and detect ADXL345 accelerometer
+  Serial.println("Initializing ADXL345 accelerometer...");
+  if (initializeADXL345()) {
+    Serial.println("ADXL345 found and initialized successfully!");
+    adxl345_found = true;
+    
+    // Calibrate ADXL345 with 400 attempts
+    Serial.println("Calibrating ADXL345 with 400 samples...");
+    calibrateADXL345(400);
+    Serial.println("ADXL345 calibration complete!");
+  } else {
+    Serial.println("ADXL345 not found! Continuing without accelerometer...");
+    adxl345_found = false;
+  }
+  
   // Initialize sonar sensors
   pinMode(FWD_TRIG_PIN, OUTPUT);
   pinMode(FWD_ECHO_PIN, INPUT);
@@ -81,21 +86,24 @@ void setup() {
   Serial.println("Sonar sensors initialized.");
   
   // Initialize stepper motors
-  Serial.println("Initializing stepper motors...");
-  leftStepper.setSpeed(50);
-  rightStepper.setSpeed(50);
-  Serial.println("Stepper motors initialized.");
+  Serial.println("Initializing DC motors...");
+  // Set initial speed to 0 and stop motors
+  motor1.setSpeed(0);
+  motor2.setSpeed(0);
+  motor1.run(RELEASE);
+  motor2.run(RELEASE);
+  Serial.println("DC motors initialized.");
   
-  // Test stepper motors briefly
-  Serial.println("Testing stepper motors...");
-  for (int i = 0; i < 10; i++) {
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    delay(10);
-  }
-  leftStepper.setSpeed(0);
-  rightStepper.setSpeed(0);
-  Serial.println("Stepper motor test complete.");
+  // Test DC motors briefly
+  Serial.println("Testing DC motors...");
+  motor1.setSpeed(100);
+  motor2.setSpeed(100);
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  delay(500);
+  motor1.run(RELEASE);
+  motor2.run(RELEASE);
+  Serial.println("DC motor test complete.");
   
   // Print motor shield information
   Serial.println("Printing motor configuration...");
@@ -124,25 +132,44 @@ void setup() {
 // MAIN LOOP - Contains the robot's movement sequence
 //======================================================================
 void loop() {
+  // Update ADXL345 position tracking
+  updateADXL345Position();
+  
+  // Reset position tracking before starting movement
+  if (adxl345_found) {
+    resetADXL345Position();
+    Serial.println("ADXL345 position tracking reset for new movement sequence");
+  }
+  
   // This is the main sequence as requested.
   Serial.println("Step 1: Moving forward 2 meters...");
-  moveForwardWithObstacleCheck(200); // 200 cm = 2 meters
-
+  moveForwardWithObstacleCheck(); // 5 seconds forward
+  
   Serial.println("Step 2: Turning right 90 degrees...");
-  turnRight(90);
-
+  turnRight(); // 2 seconds right turn
+  
   Serial.println("Step 3: Moving forward 50 cm...");
-  moveForwardWithObstacleCheck(50);
-
+  moveForwardShort(); // Short forward movement
+  
   Serial.println("Step 4: Turning right 90 degrees...");
-  turnRight(90);
+  turnRight(); // 2 seconds right turn
   
   Serial.println("Step 5: Moving forward 2 meters...");
-  moveForwardWithObstacleCheck(200);
-
-  Serial.println("\n--- Sequence Complete. Halting. ---");
+  moveForwardWithObstacleCheck(); // 5 seconds forward
+  
+  Serial.println("Sequence complete! Stopping motors.");
   stopMotors();
-  while(1); // Stop the program here
+  
+  // Final ADXL345 position report
+  if (adxl345_found) {
+    Serial.println("\n=== FINAL ADXL345 POSITION REPORT ===");
+    Serial.print("Final Position: ");
+    Serial.println(getADXL345PositionString());
+    Serial.print("Total Distance Traveled: ");
+    Serial.print(getADXL345Distance());
+    Serial.println(" meters");
+    Serial.println("=====================================");
+  }
 }
 
 //======================================================================
@@ -150,143 +177,265 @@ void loop() {
 //======================================================================
 
 /**
- * Moves the robot forward for a given distance using time-based navigation.
- * Continuously monitors for obstacles during movement.
- * @param distanceCm The distance to travel in centimeters.
+ * Moves the robot forward for a short distance (50cm).
+ * Uses time-based movement (no gyro).
  */
-void moveForwardWithObstacleCheck(float distanceCm) {
-  Serial.print("Moving forward "); Serial.print(distanceCm); Serial.println(" cm");
+void moveForwardShort() {
+  Serial.println("Moving forward 50 cm...");
   
-  // Calculate the time required to travel the distance based on the calibrated speed
-  float durationSeconds = distanceCm / ROBOT_SPEED_CM_PER_S;
-  long durationMillis = durationSeconds * 1000;
-
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Start forward movement
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  
   unsigned long startTime = millis();
-  unsigned long lastObstacleCheck = millis();
+  unsigned long moveTimeMillis = 1250; // 1.25 seconds for 50cm (shorter than 5s for 2m)
   
-  // Set motors to move forward
-  setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
-  
-  while (millis() - startTime < durationMillis) {
-    // Check for obstacles every 100ms
-    if (millis() - lastObstacleCheck > 100) {
-      if (checkForObstacles()) {
-        Serial.println("Obstacle detected! Attempting to avoid...");
-        stopMotors();
-        if (avoidObstacle()) {
-          Serial.println("Obstacle avoided, continuing...");
-          // Recalculate remaining time and continue
-          unsigned long elapsedTime = millis() - startTime;
-          long remainingTime = durationMillis - elapsedTime;
-          if (remainingTime > 0) {
-            startTime = millis() - remainingTime;
-            setMotorSpeed(MOTOR_SPEED, MOTOR_SPEED);
-            continue;
-          }
-        } else {
-          Serial.println("Could not avoid obstacle. Stopping movement.");
-          return; // Exit the function
-        }
-      }
-      lastObstacleCheck = millis();
+  while (millis() - startTime < moveTimeMillis) {
+    // Update ADXL345 position tracking
+    updateADXL345Position();
+    
+    // Check for forward obstacles
+    int forwardDistance = getForwardDistance();
+    Serial.print("Forward distance: ");
+    Serial.println(forwardDistance);
+    
+    // Check for ground/cliff
+    long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+    Serial.print("Ground distance: ");
+    Serial.print(groundDistance);
+    Serial.println(" cm");
+    
+    // Report ADXL345 position if available
+    if (adxl345_found) {
+      Serial.print("ADXL345: ");
+      Serial.println(getADXL345PositionString());
     }
     
-    // Run stepper motors
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
+    // Check for obstacles or holes
+    bool obstacleDetected = (forwardDistance < OBSTACLE_THRESHOLD_CM);
+    bool holeDetected = (groundDistance > CLIFF_THRESHOLD_CM);
     
-    delay(50); // Small delay for stability
+    if (obstacleDetected) {
+      Serial.println("! FORWARD OBSTACLE DETECTED!");
+      stopMotors();
+      avoidObstacle();
+      return;
+    }
+    
+    if (holeDetected) {
+      Serial.println("! HOLE/CLIFF DETECTED! No ground in front!");
+      stopMotors();
+      avoidObstacle();
+      return;
+    }
+    
+    delay(100); // Check every 100ms
   }
   
-  // Stop after the time has elapsed
+  // Stop motors after movement
+  stopMotors();
+  Serial.println("Short forward movement complete.");
+}
+
+/**
+ * Moves the robot forward while checking for obstacles.
+ * Uses time-based movement (no gyro).
+ */
+void moveForwardWithObstacleCheck() {
+  Serial.println("Moving forward with obstacle check...");
+  
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Start forward movement
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  
+  unsigned long startTime = millis();
+  unsigned long moveTimeMillis = 5000; // 5 seconds like in motor_move.ino
+  
+  while (millis() - startTime < moveTimeMillis) {
+    // Update ADXL345 position tracking
+    updateADXL345Position();
+    
+    // Check for forward obstacles
+    int forwardDistance = getForwardDistance();
+    Serial.print("Forward distance: ");
+    Serial.println(forwardDistance);
+    
+    // Check for ground/cliff
+    long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+    Serial.print("Ground distance: ");
+    Serial.print(groundDistance);
+    Serial.println(" cm");
+    
+    // Report ADXL345 position if available
+    if (adxl345_found) {
+      Serial.print("ADXL345: ");
+      Serial.println(getADXL345PositionString());
+    }
+    
+    // Check for obstacles or holes
+    bool obstacleDetected = (forwardDistance < OBSTACLE_THRESHOLD_CM);
+    bool holeDetected = (groundDistance > CLIFF_THRESHOLD_CM);
+    
+    if (obstacleDetected) {
+      Serial.println("! FORWARD OBSTACLE DETECTED!");
+      stopMotors();
+      avoidObstacle();
+      return;
+    }
+    
+    if (holeDetected) {
+      Serial.println("! HOLE/CLIFF DETECTED! No ground in front!");
+      stopMotors();
+      avoidObstacle();
+      return;
+    }
+    
+    delay(100); // Check every 100ms
+  }
+  
+  // Stop motors after movement
   stopMotors();
   Serial.println("Forward movement complete.");
 }
 
 /**
- * Turns the robot right by a specified angle using time-based turning.
- * @param targetAngle The angle in degrees to turn.
+ * Turns the robot right using time-based navigation.
  */
-void turnRight(float targetAngle) {
-  Serial.print("Turning right "); Serial.print(targetAngle); Serial.println(" degrees");
+void turnRight() {
+  Serial.println("Turning right...");
   
-  // Calculate turn time based on angle (approximate)
-  // Assuming 90 degrees takes about 2 seconds at TURN_SPEED
-  float turnTimeSeconds = (targetAngle / 90.0) * 2.0;
-  long turnTimeMillis = turnTimeSeconds * 1000;
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
   
-  // Start turning: right motor backward, left motor forward
-  setMotorSpeed(TURN_SPEED, -TURN_SPEED);
+  // Right turn: motor1 forward, motor2 backward
+  motor1.run(FORWARD);
+  motor2.run(BACKWARD);
   
   unsigned long startTime = millis();
+  unsigned long turnTimeMillis = 2000; // 2 seconds like in motor_move.ino
   
   while (millis() - startTime < turnTimeMillis) {
-    // Run stepper motors
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    
     delay(50);
   }
   
+  // Stop motors after turn
   stopMotors();
-  delay(200); // Pause after turn
-  Serial.println("Turn complete.");
+  Serial.println("Right turn complete.");
 }
 
 /**
- * Attempts to avoid obstacles by turning left or right using gyro-based navigation.
+ * Attempts to avoid obstacles by checking both forward and ground sonars.
+ * Chooses the side with ground to go around obstacles.
  * @return True if avoidance was successful, false otherwise.
  */
 bool avoidObstacle() {
-  // Check which side has more space
-  long leftDistance = checkLeftSide();
-  long rightDistance = checkRightSide();
+  Serial.println("=== OBSTACLE AVOIDANCE STARTED ===");
   
-  Serial.print("Left distance: "); Serial.print(leftDistance); Serial.println(" cm");
-  Serial.print("Right distance: "); Serial.print(rightDistance); Serial.println(" cm");
+  // Check forward obstacle
+  long forwardDistance = readSonar(FWD_TRIG_PIN, FWD_ECHO_PIN);
+  Serial.print("Forward obstacle distance: ");
+  Serial.print(forwardDistance);
+  Serial.println(" cm");
   
-  if (leftDistance > rightDistance && leftDistance > OBSTACLE_THRESHOLD_CM) {
-    // Turn left to avoid using gyro
-    Serial.println("Turning left 45 degrees to avoid obstacle...");
-    turnLeft(45);
-    return true;
-  } else if (rightDistance > OBSTACLE_THRESHOLD_CM) {
-    // Turn right to avoid using gyro
-    Serial.println("Turning right 45 degrees to avoid obstacle...");
-    turnRight(45);
-    return true;
+  // Check ground in front
+  long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+  Serial.print("Ground distance: ");
+  Serial.print(groundDistance);
+  Serial.println(" cm");
+  
+  // Determine if there's a hole (no ground)
+  bool holeDetected = (groundDistance > CLIFF_THRESHOLD_CM);
+  
+  if (holeDetected) {
+    Serial.println("! HOLE DETECTED! No ground in front!");
   }
   
-  return false; // No clear path found
+  // Check left side for ground
+  Serial.println("Checking left side for ground...");
+  long leftGroundDistance = checkLeftSideGround();
+  Serial.print("Left side ground distance: ");
+  Serial.print(leftGroundDistance);
+  Serial.println(" cm");
+  
+  // Check right side for ground
+  Serial.println("Checking right side for ground...");
+  long rightGroundDistance = checkRightSideGround();
+  Serial.print("Right side ground distance: ");
+  Serial.print(rightGroundDistance);
+  Serial.println(" cm");
+  
+  // Determine which side has ground
+  bool leftHasGround = (leftGroundDistance <= CLIFF_THRESHOLD_CM);
+  bool rightHasGround = (rightGroundDistance <= CLIFF_THRESHOLD_CM);
+  
+  Serial.print("Left side has ground: ");
+  Serial.println(leftHasGround ? "YES" : "NO");
+  Serial.print("Right side has ground: ");
+  Serial.println(rightHasGround ? "YES" : "NO");
+  
+  // Choose direction based on ground availability
+  if (leftHasGround && rightHasGround) {
+    // Both sides have ground, choose the side with more space
+    if (leftGroundDistance > rightGroundDistance) {
+      Serial.println("Both sides have ground. Choosing LEFT (more space)");
+      turnLeft();
+      return true;
+    } else {
+      Serial.println("Both sides have ground. Choosing RIGHT (more space)");
+      turnRight();
+      return true;
+    }
+  } else if (leftHasGround) {
+    // Only left side has ground
+    Serial.println("Only LEFT side has ground. Turning left to avoid obstacle/hole");
+    turnLeft();
+    return true;
+  } else if (rightHasGround) {
+    // Only right side has ground
+    Serial.println("Only RIGHT side has ground. Turning right to avoid obstacle/hole");
+    turnRight();
+    return true;
+  } else {
+    // No ground on either side - dangerous situation
+    Serial.println("! DANGER! No ground on either side!");
+    Serial.println("Stopping robot for safety");
+    stopMotors();
+    return false;
+  }
 }
 
 /**
- * Turns the robot left by a specified angle using time-based turning.
- * @param targetAngle The angle in degrees to turn.
+ * Turns the robot left using time-based navigation.
  */
-void turnLeft(float targetAngle) {
-  Serial.print("Turning left "); Serial.print(targetAngle); Serial.println(" degrees");
+void turnLeft() {
+  Serial.println("Turning left...");
   
-  // Calculate turn time based on angle (approximate)
-  // Assuming 90 degrees takes about 2 seconds at TURN_SPEED
-  float turnTimeSeconds = (targetAngle / 90.0) * 2.0;
-  long turnTimeMillis = turnTimeSeconds * 1000;
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
   
-  // Start turning: left motor backward, right motor forward
-  setMotorSpeed(-TURN_SPEED, TURN_SPEED);
+  // Left turn: motor1 backward, motor2 forward
+  motor1.run(BACKWARD);
+  motor2.run(FORWARD);
   
   unsigned long startTime = millis();
+  unsigned long turnTimeMillis = 2000; // 2 seconds like in motor_move.ino
   
   while (millis() - startTime < turnTimeMillis) {
-    // Run stepper motors
-    leftStepper.runSpeed();
-    rightStepper.runSpeed();
-    
     delay(50);
   }
   
+  // Stop motors after turn
   stopMotors();
-  delay(200); // Pause after turn
   Serial.println("Left turn complete.");
 }
 
@@ -307,6 +456,92 @@ long checkLeftSide() {
 long checkRightSide() {
   // For simplicity, using the forward sonar
   // In a real implementation, you might have a dedicated right sonar
+  return readSonar(FWD_TRIG_PIN, FWD_ECHO_PIN);
+}
+
+/**
+ * Checks the left side for ground using the ground sonar.
+ * Robot turns left slightly to check ground on left side.
+ * @return Ground distance in centimeters.
+ */
+long checkLeftSideGround() {
+  // Turn left slightly to check ground on left side
+  Serial.println("Turning left to check ground on left side...");
+  
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Left turn: motor1 backward, motor2 forward
+  motor1.run(BACKWARD);
+  motor2.run(FORWARD);
+  
+  // Turn for a short time to check left side
+  delay(500); // 0.5 seconds turn
+  
+  // Stop motors
+  stopMotors();
+  
+  // Read ground distance
+  long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+  
+  // Turn back to original direction
+  Serial.println("Turning back to original direction...");
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  motor1.run(FORWARD);
+  motor2.run(BACKWARD);
+  delay(500); // 0.5 seconds back
+  
+  stopMotors();
+  
+  return groundDistance;
+}
+
+/**
+ * Checks the right side for ground using the ground sonar.
+ * Robot turns right slightly to check ground on right side.
+ * @return Ground distance in centimeters.
+ */
+long checkRightSideGround() {
+  // Turn right slightly to check ground on right side
+  Serial.println("Turning right to check ground on right side...");
+  
+  // Set motor speed to 255 (100%) like in motor_move.ino
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  
+  // Right turn: motor1 forward, motor2 backward
+  motor1.run(FORWARD);
+  motor2.run(BACKWARD);
+  
+  // Turn for a short time to check right side
+  delay(500); // 0.5 seconds turn
+  
+  // Stop motors
+  stopMotors();
+  
+  // Read ground distance
+  long groundDistance = readSonar(GND_TRIG_PIN, GND_ECHO_PIN);
+  
+  // Turn back to original direction
+  Serial.println("Turning back to original direction...");
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  motor1.run(BACKWARD);
+  motor2.run(FORWARD);
+  delay(500); // 0.5 seconds back
+  
+  stopMotors();
+  
+  return groundDistance;
+}
+
+/**
+ * Gets the forward distance from the forward sonar sensor.
+ * @return Distance in centimeters.
+ */
+int getForwardDistance() {
   return readSonar(FWD_TRIG_PIN, FWD_ECHO_PIN);
 }
 
@@ -356,47 +591,13 @@ bool checkForObstacles() {
 //======================================================================
 
 /**
- * Controls both motors at a given speed.
- * @param leftSpeed Speed for the left motor (-255 to 255).
- * @param rightSpeed Speed for the right motor (-255 to 255).
- */
-void setMotorSpeed(int leftSpeed, int rightSpeed) {
-  Serial.print("Setting motor speeds - Left: ");
-  Serial.print(leftSpeed);
-  Serial.print(", Right: ");
-  Serial.println(rightSpeed);
-  
-  // Control Left Motor
-  if (leftSpeed > 0) {
-    leftStepper.setSpeed(leftSpeed);
-    Serial.println("Left motor: FORWARD");
-  } else if (leftSpeed < 0) {
-    leftStepper.setSpeed(-leftSpeed);
-    Serial.println("Left motor: BACKWARD");
-  } else {
-    leftStepper.setSpeed(0);
-    Serial.println("Left motor: STOP");
-  }
-
-  // Control Right Motor
-  if (rightSpeed > 0) {
-    rightStepper.setSpeed(rightSpeed);
-    Serial.println("Right motor: FORWARD");
-  } else if (rightSpeed < 0) {
-    rightStepper.setSpeed(-rightSpeed);
-    Serial.println("Right motor: BACKWARD");
-  } else {
-    rightStepper.setSpeed(0);
-    Serial.println("Right motor: STOP");
-  }
-}
-
-/**
  * Stops both motors.
  */
 void stopMotors() {
-  leftStepper.setSpeed(0);
-  rightStepper.setSpeed(0);
+  motor1.setSpeed(0);
+  motor1.run(RELEASE);
+  motor2.setSpeed(0);
+  motor2.run(RELEASE);
 }
 
 /**
@@ -404,11 +605,220 @@ void stopMotors() {
  */
 void printMotorShieldInfo() {
   Serial.println("\n=== MOTOR CONFIGURATION ===");
-  Serial.println("Using AFMotor library with stepper motors.");
+  Serial.println("Using AFMotor library with DC motors.");
   Serial.println("Motor Configuration:");
-  Serial.println("  Left Motor:  AF_Stepper(200, 1)");
-  Serial.println("  Right Motor: AF_Stepper(200, 2)");
+  Serial.println("  Left Motor:  AF_DCMotor(1)");
+  Serial.println("  Right Motor: AF_DCMotor(2)");
   Serial.println("=====================================\n");
+}
+
+//======================================================================
+// ADXL345 ACCELEROMETER FUNCTIONS
+//======================================================================
+
+/**
+ * Initializes the ADXL345 accelerometer.
+ * @return True if ADXL345 is found and initialized, false otherwise.
+ */
+bool initializeADXL345() {
+  // Check if device responds
+  Wire.beginTransmission(ADXL345_ADDR);
+  Wire.write(0x00); // Device ID register
+  Wire.endTransmission(false);
+  Wire.requestFrom(ADXL345_ADDR, 1);
+  
+  if (Wire.available()) {
+    byte deviceId = Wire.read();
+    if (deviceId == ADXL345_DEVID) {
+      Serial.print("ADXL345 Device ID: 0x");
+      Serial.println(deviceId, HEX);
+      
+      // Set measurement mode
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(0x2D); // Power control register
+      Wire.write(0x08); // Set measure bit
+      Wire.endTransmission();
+      
+      // Set data format (16g range, full resolution)
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(0x31); // Data format register
+      Wire.write(0x0B); // 16g range, full resolution
+      Wire.endTransmission();
+      
+      // Set data rate (100Hz)
+      Wire.beginTransmission(ADXL345_ADDR);
+      Wire.write(0x2C); // Data rate register
+      Wire.write(0x0A); // 100Hz
+      Wire.endTransmission();
+      
+      delay(100); // Wait for settings to take effect
+      return true;
+    } else {
+      Serial.print("Wrong Device ID: 0x");
+      Serial.println(deviceId, HEX);
+      return false;
+    }
+  } else {
+    Serial.println("No response from ADXL345");
+    return false;
+  }
+}
+
+/**
+ * Calibrates the ADXL345 accelerometer by taking multiple samples.
+ * @param samples Number of samples to take for calibration.
+ */
+void calibrateADXL345(int samples) {
+  float sum[3] = {0, 0, 0};
+  
+  Serial.print("Taking ");
+  Serial.print(samples);
+  Serial.println(" calibration samples...");
+  
+  for (int i = 0; i < samples; i++) {
+    float accel[3];
+    readADXL345Raw(accel);
+    
+    sum[0] += accel[0];
+    sum[1] += accel[1];
+    sum[2] += accel[2];
+    
+    if (i % 50 == 0) {
+      Serial.print("Calibration progress: ");
+      Serial.print(i);
+      Serial.print("/");
+      Serial.println(samples);
+    }
+    
+    delay(10); // Small delay between readings
+  }
+  
+  // Calculate average offsets
+  adxl345_offset[0] = sum[0] / samples;
+  adxl345_offset[1] = sum[1] / samples;
+  adxl345_offset[2] = sum[2] / samples;
+  
+  Serial.println("Calibration offsets calculated:");
+  Serial.print("X offset: ");
+  Serial.println(adxl345_offset[0]);
+  Serial.print("Y offset: ");
+  Serial.println(adxl345_offset[1]);
+  Serial.print("Z offset: ");
+  Serial.println(adxl345_offset[2]);
+}
+
+/**
+ * Reads raw accelerometer data from ADXL345.
+ * @param accel Array to store X, Y, Z acceleration values.
+ */
+void readADXL345Raw(float accel[3]) {
+  Wire.beginTransmission(ADXL345_ADDR);
+  Wire.write(0x32); // Start from DATAX0 register
+  Wire.endTransmission(false);
+  Wire.requestFrom(ADXL345_ADDR, 6);
+  
+  if (Wire.available() >= 6) {
+    int16_t rawX = Wire.read() | (Wire.read() << 8);
+    int16_t rawY = Wire.read() | (Wire.read() << 8);
+    int16_t rawZ = Wire.read() | (Wire.read() << 8);
+    
+    // Convert to g (16g range, 13-bit resolution)
+    accel[0] = rawX * 0.0039; // 16g / 4096
+    accel[1] = rawY * 0.0039;
+    accel[2] = rawZ * 0.0039;
+  }
+}
+
+/**
+ * Reads calibrated accelerometer data.
+ * @param accel Array to store calibrated X, Y, Z acceleration values.
+ */
+void readADXL345Calibrated(float accel[3]) {
+  readADXL345Raw(accel);
+  
+  // Apply calibration offsets
+  accel[0] -= adxl345_offset[0];
+  accel[1] -= adxl345_offset[1];
+  accel[2] -= adxl345_offset[2];
+}
+
+/**
+ * Updates position and velocity using accelerometer data.
+ * Should be called regularly in the main loop.
+ */
+void updateADXL345Position() {
+  if (!adxl345_found) return;
+  
+  unsigned long currentTime = millis();
+  if (currentTime - last_adxl345_read >= ADXL345_READ_INTERVAL) {
+    float accel[3];
+    readADXL345Calibrated(accel);
+    
+    // Calculate time delta
+    float dt = (currentTime - last_adxl345_read) / 1000.0; // Convert to seconds
+    
+    // Update velocity (integrate acceleration)
+    adxl345_velocity[0] += accel[0] * 9.81 * dt; // Convert g to m/s²
+    adxl345_velocity[1] += accel[1] * 9.81 * dt;
+    adxl345_velocity[2] += accel[2] * 9.81 * dt;
+    
+    // Update position (integrate velocity)
+    adxl345_position[0] += adxl345_velocity[0] * dt;
+    adxl345_position[1] += adxl345_velocity[1] * dt;
+    adxl345_position[2] += adxl345_velocity[2] * dt;
+    
+    last_adxl345_read = currentTime;
+  }
+}
+
+/**
+ * Gets the current distance traveled (magnitude of position).
+ * @return Distance in meters.
+ */
+float getADXL345Distance() {
+  if (!adxl345_found) return 0.0;
+  
+  float distance = sqrt(
+    adxl345_position[0] * adxl345_position[0] +
+    adxl345_position[1] * adxl345_position[1] +
+    adxl345_position[2] * adxl345_position[2]
+  );
+  
+  return distance;
+}
+
+/**
+ * Gets the current position as a string for debugging.
+ * @return String with X, Y, Z position values.
+ */
+String getADXL345PositionString() {
+  if (!adxl345_found) return "ADXL345 not available";
+  
+  String pos = "Pos(X:";
+  pos += adxl345_position[0];
+  pos += "m, Y:";
+  pos += adxl345_position[1];
+  pos += "m, Z:";
+  pos += adxl345_position[2];
+  pos += "m)";
+  
+  return pos;
+}
+
+/**
+ * Resets the position and velocity tracking.
+ */
+void resetADXL345Position() {
+  if (!adxl345_found) return;
+  
+  adxl345_position[0] = 0;
+  adxl345_position[1] = 0;
+  adxl345_position[2] = 0;
+  adxl345_velocity[0] = 0;
+  adxl345_velocity[1] = 0;
+  adxl345_velocity[2] = 0;
+  
+  Serial.println("ADXL345 position tracking reset");
 }
 
 //======================================================================
