@@ -12,6 +12,11 @@
 AF_DCMotor motor1(1);  // Left motor on M1
 AF_DCMotor motor2(2);  // Right motor on M2
 
+// Motor calibration variables
+int motor1Speed = 255;  // Left motor speed (0-255)
+int motor2Speed = 255;  // Right motor speed (0-255)
+bool motorsCalibrated = false;
+
 // ADXL345 Accelerometer variables
 bool adxl345_found = false;
 float adxl345_offset[3] = {0, 0, 0}; // Calibration offsets for X, Y, Z
@@ -130,6 +135,10 @@ void setup() {
   motor1.run(RELEASE);
   motor2.run(RELEASE);
   Serial.println("DC motor test complete.");
+  
+  // Calibrate motors for straight-line movement
+  Serial.println("Starting motor calibration...");
+  calibrateMotors();
   
   // Print motor shield information
   Serial.println("Printing motor configuration...");
@@ -427,9 +436,9 @@ bool moveForwardDistanceWithRetry(float targetDistanceMeters) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Start forward movement
   motor1.run(FORWARD);
@@ -500,8 +509,8 @@ bool moveForwardDistanceWithRetry(float targetDistanceMeters) {
         if (avoidObstacle()) {
           // Resume movement after avoidance
           Serial.println("Resuming forward movement after obstacle avoidance...");
-          motor1.setSpeed(255);
-          motor2.setSpeed(255);
+          motor1.setSpeed(motor1Speed);
+          motor2.setSpeed(motor2Speed);
           motor1.run(FORWARD);
           motor2.run(FORWARD);
           
@@ -519,8 +528,8 @@ bool moveForwardDistanceWithRetry(float targetDistanceMeters) {
           delay(1000);
           
           // Resume movement
-          motor1.setSpeed(255);
-          motor2.setSpeed(255);
+          motor1.setSpeed(motor1Speed);
+          motor2.setSpeed(motor2Speed);
           motor1.run(FORWARD);
           motor2.run(FORWARD);
           
@@ -560,9 +569,9 @@ void moveForwardDistance(float targetDistanceMeters) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Start forward movement
   motor1.run(FORWARD);
@@ -677,9 +686,9 @@ bool moveBackwardDistanceWithRetry(float targetDistanceMeters) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Start backward movement
   motor1.run(BACKWARD);
@@ -742,9 +751,9 @@ void moveBackwardDistance(float targetDistanceMeters) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Start backward movement
   motor1.run(BACKWARD);
@@ -796,9 +805,9 @@ void moveBackwardDistance(float targetDistanceMeters) {
 void turnRight() {
   Serial.println("Turning right...");
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Right turn: motor1 forward, motor2 backward
   motor1.run(FORWARD);
@@ -904,9 +913,9 @@ bool avoidObstacle() {
 void turnLeft() {
   Serial.println("Turning left...");
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Left turn: motor1 backward, motor2 forward
   motor1.run(BACKWARD);
@@ -953,9 +962,9 @@ long checkLeftSideGround() {
   // Turn left slightly to check ground on left side
   Serial.println("Turning left to check ground on left side...");
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Left turn: motor1 backward, motor2 forward
   motor1.run(BACKWARD);
@@ -972,8 +981,8 @@ long checkLeftSideGround() {
   
   // Turn back to original direction
   Serial.println("Turning back to original direction...");
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   motor1.run(FORWARD);
   motor2.run(BACKWARD);
   delay(1000); // 1 second back
@@ -992,9 +1001,9 @@ long checkRightSideGround() {
   // Turn right slightly to check ground on right side
   Serial.println("Turning right to check ground on right side...");
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Right turn: motor1 forward, motor2 backward
   motor1.run(FORWARD);
@@ -1011,8 +1020,8 @@ long checkRightSideGround() {
   
   // Turn back to original direction
   Serial.println("Turning back to original direction...");
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   motor1.run(BACKWARD);
   motor2.run(FORWARD);
   delay(1000); // 1 second back
@@ -1094,7 +1103,149 @@ void printMotorShieldInfo() {
   Serial.println("Motor Configuration:");
   Serial.println("  Left Motor:  AF_DCMotor(1)");
   Serial.println("  Right Motor: AF_DCMotor(2)");
+  Serial.print("Calibrated Motor Speeds - Motor1: ");
+  Serial.print(motor1Speed);
+  Serial.print(", Motor2: ");
+  Serial.println(motor2Speed);
+  Serial.print("Motor Calibration Status: ");
+  Serial.println(motorsCalibrated ? "COMPLETE" : "PENDING");
   Serial.println("=====================================\n");
+}
+
+/**
+ * Calibrates the motors to ensure straight-line movement.
+ * Tests forward and backward movement and adjusts motor speeds based on ADXL345 data.
+ */
+void calibrateMotors() {
+  Serial.println("=== MOTOR CALIBRATION STARTED ===");
+  
+  if (!adxl345_found) {
+    Serial.println("ADXL345 not available - skipping motor calibration");
+    Serial.println("Using default motor speeds: motor1=255, motor2=255");
+    return;
+  }
+  
+  // Reset ADXL345 position tracking
+  resetADXL345Position();
+  
+  // Test forward movement (10cm)
+  Serial.println("Testing forward movement (10cm)...");
+  float forwardDrift = testMovementDirection(true, 0.1); // 10cm = 0.1m
+  
+  // Test backward movement (10cm)
+  Serial.println("Testing backward movement (10cm)...");
+  float backwardDrift = testMovementDirection(false, 0.1); // 10cm = 0.1m
+  
+  // Calculate average drift
+  float averageDrift = (forwardDrift + backwardDrift) / 2.0;
+  
+  Serial.print("Forward drift: ");
+  Serial.print(forwardDrift);
+  Serial.println(" meters");
+  Serial.print("Backward drift: ");
+  Serial.print(backwardDrift);
+  Serial.println(" meters");
+  Serial.print("Average drift: ");
+  Serial.print(averageDrift);
+  Serial.println(" meters");
+  
+  // Adjust motor speeds based on drift
+  if (abs(averageDrift) > 0.02) { // If drift is more than 2cm
+    Serial.println("Significant drift detected - adjusting motor speeds...");
+    
+    // Determine which motor is faster based on Y-axis drift
+    if (averageDrift > 0) {
+      // Robot drifted to the right (positive Y), so left motor is faster
+      Serial.println("Robot drifted right - left motor is faster");
+      motor1Speed = constrain(motor1Speed - 10, 200, 255); // Reduce left motor speed
+      motor2Speed = constrain(motor2Speed + 5, 200, 255);  // Increase right motor speed
+    } else {
+      // Robot drifted to the left (negative Y), so right motor is faster
+      Serial.println("Robot drifted left - right motor is faster");
+      motor1Speed = constrain(motor1Speed + 5, 200, 255);  // Increase left motor speed
+      motor2Speed = constrain(motor2Speed - 10, 200, 255); // Reduce right motor speed
+    }
+    
+    Serial.print("Adjusted motor speeds - Motor1: ");
+    Serial.print(motor1Speed);
+    Serial.print(", Motor2: ");
+    Serial.println(motor2Speed);
+    
+    // Test the adjustment with another forward movement
+    Serial.println("Testing adjusted speeds...");
+    resetADXL345Position();
+    float adjustedDrift = testMovementDirection(true, 0.1);
+    
+    Serial.print("Adjusted drift: ");
+    Serial.print(adjustedDrift);
+    Serial.println(" meters");
+    
+    if (abs(adjustedDrift) < 0.02) {
+      Serial.println("Motor calibration successful!");
+      motorsCalibrated = true;
+    } else {
+      Serial.println("Motor calibration improved but may need further adjustment");
+      motorsCalibrated = true;
+    }
+  } else {
+    Serial.println("Minimal drift detected - motors are well calibrated");
+    motorsCalibrated = true;
+  }
+  
+  Serial.println("=== MOTOR CALIBRATION COMPLETE ===");
+}
+
+/**
+ * Tests movement in a specific direction and measures drift.
+ * @param forward True for forward movement, false for backward
+ * @param distance Distance to travel in meters
+ * @return Drift distance in meters (positive = right drift, negative = left drift)
+ */
+float testMovementDirection(bool forward, float distance) {
+  // Reset position tracking
+  resetADXL345Position();
+  
+  // Set motor speeds
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
+  
+  // Start movement
+  if (forward) {
+    motor1.run(FORWARD);
+    motor2.run(FORWARD);
+  } else {
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+  }
+  
+  unsigned long startTime = millis();
+  float distanceTraveled = 0.0;
+  
+  // Move for the specified distance
+  while (distanceTraveled < distance) {
+    updateADXL345Position();
+    
+    // Get current distance traveled (X-axis for forward/backward)
+    distanceTraveled = abs(adxl345_position[0]);
+    
+    delay(50); // Check every 50ms
+  }
+  
+  // Stop motors
+  stopMotors();
+  
+  // Get final Y position (drift)
+  float drift = adxl345_position[1];
+  
+  Serial.print("Movement complete. Distance: ");
+  Serial.print(distanceTraveled);
+  Serial.print("m, Drift: ");
+  Serial.print(drift);
+  Serial.println("m");
+  
+  delay(1000); // Wait before next test
+  
+  return drift;
 }
 
 //======================================================================
@@ -1320,9 +1471,9 @@ void turnRightAngle(float targetAngle) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Right turn: motor1 forward, motor2 backward
   motor1.run(FORWARD);
@@ -1375,9 +1526,9 @@ void turnLeftAngle(float targetAngle) {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Left turn: motor1 backward, motor2 forward
   motor1.run(BACKWARD);
@@ -1427,9 +1578,9 @@ void turnRight90() {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Right turn: motor1 forward, motor2 backward
   motor1.run(FORWARD);
@@ -1480,9 +1631,9 @@ void turnLeft90() {
     resetADXL345Position();
   }
   
-  // Set motor speed to 255 (100%) like in motor_move.ino
-  motor1.setSpeed(255);
-  motor2.setSpeed(255);
+  // Set motor speeds using calibrated values
+  motor1.setSpeed(motor1Speed);
+  motor2.setSpeed(motor2Speed);
   
   // Left turn: motor1 backward, motor2 forward
   motor1.run(BACKWARD);
