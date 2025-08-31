@@ -24,7 +24,9 @@
 
 // Array to hold the values for each channel
 unsigned int channel_values[NUM_CHANNELS];
+unsigned int previous_channel_values[NUM_CHANNELS]; // Store previous values for comparison
 unsigned long last_display_time = 0;
+bool channels_changed = false; // Flag to indicate if any channel changed
 
 // -- USB Host Shield Setup --
 USB Usb;
@@ -104,6 +106,11 @@ void JoystickEvents::OnJoystickData(uint8_t len, uint8_t *buf) {
   // Make sure values are within the valid range
   for(int i = 0; i < NUM_CHANNELS; i++) {
     channel_values[i] = constrain(channel_values[i], 1000, 2000);
+    
+    // Check if this channel value changed
+    if (channel_values[i] != previous_channel_values[i]) {
+      channels_changed = true;
+    }
   }
 }
 
@@ -118,6 +125,7 @@ void setup() {
   // Initialize all channels to center position
   for (int i = 0; i < NUM_CHANNELS; i++) {
     channel_values[i] = 1500; // Center position
+    previous_channel_values[i] = 1500; // Initialize previous values
   }
 
   // Initialize the USB Host Shield
@@ -131,8 +139,10 @@ void setup() {
   // Set the HID parser
   Hid.SetReportParser(0, &JoyEvents);
   
-  Serial.println("\n=== Channel Values ===");
-  Serial.println("Format: Channel Name: Value (us) | Visual Bar");
+  Serial.println("\n=== USB Joystick Channel Monitor ===");
+  Serial.println("Waiting for joystick input...");
+  Serial.println("Display will show only when channels change");
+  Serial.println("Format: Channel Name: Previous -> Current (us) | % | Visual Bar");
   Serial.println("=============================================");
 }
 
@@ -140,52 +150,62 @@ void loop() {
   // This task must be called continuously to keep the USB stack running.
   Usb.Task();
 
-  // Display channel values at regular intervals
-  unsigned long current_time = millis();
-  if (current_time - last_display_time >= DISPLAY_INTERVAL) {
+  // Only display if channels have changed
+  if (channels_changed) {
     displayChannelValues();
-    last_display_time = current_time;
+    channels_changed = false;
+    
+    // Update previous values
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+      previous_channel_values[i] = channel_values[i];
+    }
   }
 }
 
 void displayChannelValues() {
-  // Clear the display area (works best with Serial Monitor set to "No line ending")
-  Serial.print("\033[2J\033[H"); // Clear screen and move cursor to top
-  
-  Serial.println("=== USB Joystick Channel Monitor ===");
-  Serial.println("Raw data is shown above, channel values below:");
+  Serial.println("\n=== Channel Values Changed ===");
+  Serial.println("Timestamp: " + String(millis()) + "ms");
   Serial.println("=============================================");
   
-  // Display each channel value with a visual bar
+  // Display only channels that changed
+  bool any_changed = false;
   for (int i = 0; i < NUM_CHANNELS; i++) {
-    // Calculate percentage for visual bar
-    int percentage = map(channel_values[i], 1000, 2000, 0, 100);
-    
-    // Create visual bar
-    char bar[21];
-    int bar_length = map(percentage, 0, 100, 0, 20);
-    for (int j = 0; j < 20; j++) {
-      if (j < bar_length) {
-        bar[j] = '#';
-      } else {
-        bar[j] = '-';
+    if (channel_values[i] != previous_channel_values[i]) {
+      any_changed = true;
+      
+      // Calculate percentage for visual bar
+      int percentage = map(channel_values[i], 1000, 2000, 0, 100);
+      
+      // Create visual bar
+      char bar[21];
+      int bar_length = map(percentage, 0, 100, 0, 20);
+      for (int j = 0; j < 20; j++) {
+        if (j < bar_length) {
+          bar[j] = '#';
+        } else {
+          bar[j] = '-';
+        }
       }
+      bar[20] = '\0';
+      
+      // Display channel info with change indicator
+      Serial.print(channel_names[i]);
+      Serial.print(": ");
+      Serial.print(previous_channel_values[i]);
+      Serial.print("us -> ");
+      Serial.print(channel_values[i]);
+      Serial.print("us | ");
+      Serial.print(percentage);
+      Serial.print("% | ");
+      Serial.println(bar);
     }
-    bar[20] = '\0';
-    
-    // Display channel info
-    Serial.print(channel_names[i]);
-    Serial.print(": ");
-    Serial.print(channel_values[i]);
-    Serial.print("us | ");
-    Serial.print(percentage);
-    Serial.print("% | ");
-    Serial.println(bar);
+  }
+  
+  if (!any_changed) {
+    Serial.println("No channels changed");
   }
   
   Serial.println("=============================================");
-  Serial.println("Center: 1500us | Min: 1000us | Max: 2000us");
-  Serial.println("Move joystick axes to see changes...");
 }
 
 // Alternative display function for simpler output
