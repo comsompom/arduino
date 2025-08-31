@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Simple USB Test
+ * Minimal USB Test
  * 
  * HARDWARE:
  * - Arduino UNO
@@ -9,7 +9,7 @@
  * - USB Host Shield Library 2.0 by felis
  * 
  * DESCRIPTION:
- * Simple test to verify USB Host Shield is working
+ * Minimal test to verify USB Host Shield is working
  * and detect any USB devices.
  *
  ******************************************************************************/
@@ -23,7 +23,7 @@ USBHub Hub(&Usb);
 HIDUniversal Hid(&Usb);
 
 // Simple parser class
-class SimpleParser : public HIDReportParser {
+class MinimalParser : public HIDReportParser {
 public:
   void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf) {
     Serial.print("Data received - Length: ");
@@ -37,11 +37,11 @@ public:
   }
 };
 
-SimpleParser Parser;
+MinimalParser Parser;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("=== Simple USB Test ===");
+  Serial.println("=== Minimal USB Test ===");
   Serial.println("Testing USB Host Shield...");
 
   // Initialize the USB Host Shield
@@ -76,33 +76,16 @@ void loop() {
     
     // Check USB state
     Serial.print("USB State: ");
-    switch (Usb.getUsbTaskState()) {
-      case USB_STATE_DETACHED:
-        Serial.println("DETACHED");
-        break;
-      case USB_STATE_ADDRESSING:
-        Serial.println("ADDRESSING");
-        break;
-      case USB_STATE_CONFIGURING:
-        Serial.println("CONFIGURING");
-        break;
-      case USB_STATE_RUNNING:
-        Serial.println("RUNNING");
-        break;
-      default:
-        Serial.println("UNKNOWN");
-        break;
-    }
+    int state = Usb.getUsbTaskState();
+    Serial.println(state);
     
     // Check if HID device is ready
     if (Hid.isReady()) {
       Serial.println("HID Device: CONNECTED");
-      Serial.print("VID: 0x");
-      Serial.println(Hid.VID, HEX);
-      Serial.print("PID: 0x");
-      Serial.println(Hid.PID, HEX);
+      Serial.println("Device is ready and sending data");
     } else {
       Serial.println("HID Device: NOT FOUND");
+      Serial.println("No HID device detected");
     }
     
     Serial.println("=====================");
