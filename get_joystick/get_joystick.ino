@@ -1,42 +1,37 @@
 /*******************************************************************************
- * USB Joystick Debug - Turtle Beach VelocityOne Flightstick
+ * USB Joystick Channel Monitor
  * 
  * HARDWARE:
  * - Arduino UNO
  * - USB Host Shield 2.0
- * - Turtle Beach VelocityOne Flightstick
  * 
  * LIBRARIES:
  * - USB Host Shield Library 2.0 by felis
  * 
  * DESCRIPTION:
- * Comprehensive debugging sketch to identify USB connection issues
- * and get the Turtle Beach VelocityOne Flightstick working.
+ * Reads USB HID data from a joystick and displays the current channel values
+ * in real-time via Serial Monitor. This is useful for debugging and mapping
+ * joystick axes to specific channels.
  *
  ******************************************************************************/
 
 #include <hiduniversal.h>
 #include <usbhub.h>
-#include <hidboot.h>
 
 // -- Configuration --
-#define NUM_CHANNELS 20
-#define DEBUG_MODE 1
+#define NUM_CHANNELS 20      // Total number of channels to monitor
+#define DISPLAY_INTERVAL 100 // How often to display values (milliseconds)
 
 // Array to hold the values for each channel
 unsigned int channel_values[NUM_CHANNELS];
-unsigned int previous_channel_values[NUM_CHANNELS];
-bool channels_changed = false;
+unsigned int previous_channel_values[NUM_CHANNELS]; // Store previous values for comparison
+unsigned long last_display_time = 0;
+bool channels_changed = false; // Flag to indicate if any channel changed
 
 // -- USB Host Shield Setup --
 USB Usb;
 USBHub Hub(&Usb);
 HIDUniversal Hid(&Usb);
-
-// Device detection
-bool device_connected = false;
-bool hid_device_found = false;
-unsigned long last_device_check = 0;
 
 // Channel names for display
 const char* channel_names[NUM_CHANNELS] = {
@@ -64,10 +59,14 @@ void JoystickEvents::Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *bu
   OnJoystickData(len, buf);
 }
 
-// *** MAIN DATA PROCESSING FUNCTION ***
+// *** THIS IS THE MOST IMPORTANT FUNCTION TO CUSTOMIZE ***
 void JoystickEvents::OnJoystickData(uint8_t len, uint8_t *buf) {
-  // Print raw data for debugging
-  Serial.print("HID Data (len=");
+  // This is where you translate the raw joystick data buffer (buf)
+  // into your channel_values array.
+  
+  // --- STEP 1: DEBUGGING - Find your axis values ---
+  // Print the raw data from the joystick for debugging
+  Serial.print("Raw HID Data (len=");
   Serial.print(len);
   Serial.print("): ");
   for (uint8_t i = 0; i < len; i++) {
@@ -76,19 +75,42 @@ void JoystickEvents::OnJoystickData(uint8_t len, uint8_t *buf) {
   }
   Serial.println();
   
-  // Try to map the data
-  if (len >= 4) {
+  // --- STEP 2: MAPPING for Turtle Beach VelocityOne Flightstick ---
+  // The VelocityOne Flightstick typically uses a specific data format
+  // Let's try different common formats and see which one works
+  
+  if (len >= 8) { // Make sure we have enough data
     // Try different byte combinations for the axes
+    // Method 1: Direct byte values (8-bit)
     int aileron_raw = buf[0];
     int elevator_raw = buf[1];
     int throttle_raw = buf[2];
     int rudder_raw = buf[3];
     
+    // Method 2: 16-bit values (if the above doesn't work, try this)
+    // int aileron_raw = (buf[1] << 8) | buf[0];
+    // int elevator_raw = (buf[3] << 8) | buf[2];
+    // int throttle_raw = (buf[5] << 8) | buf[4];
+    // int rudder_raw = (buf[7] << 8) | buf[6];
+    
+    // Method 3: Alternative byte positions (some joysticks use different positions)
+    // int aileron_raw = buf[1];
+    // int elevator_raw = buf[2];
+    // int throttle_raw = buf[3];
+    // int rudder_raw = buf[4];
+    
     // Map the raw values to channel range (1000-2000us)
-    channel_values[0] = map(aileron_raw, 0, 255, 1000, 2000);
-    channel_values[1] = map(elevator_raw, 0, 255, 1000, 2000);
-    channel_values[2] = map(throttle_raw, 0, 255, 1000, 2000);
-    channel_values[3] = map(rudder_raw, 0, 255, 1000, 2000);
+    // Try different ranges based on your joystick's output
+    channel_values[0] = map(aileron_raw, 0, 255, 1000, 2000); // CH1: Aileron
+    channel_values[1] = map(elevator_raw, 0, 255, 1000, 2000); // CH2: Elevator
+    channel_values[2] = map(throttle_raw, 0, 255, 1000, 2000); // CH3: Throttle
+    channel_values[3] = map(rudder_raw, 0, 255, 1000, 2000); // CH4: Rudder
+    
+    // Alternative mapping for 16-bit values (uncomment if needed)
+    // channel_values[0] = map(aileron_raw, 0, 65535, 1000, 2000);
+    // channel_values[1] = map(elevator_raw, 0, 65535, 1000, 2000);
+    // channel_values[2] = map(throttle_raw, 0, 65535, 1000, 2000);
+    // channel_values[3] = map(rudder_raw, 0, 65535, 1000, 2000);
     
     // Debug: Print raw values
     Serial.print("Raw values - Aileron:");
@@ -117,47 +139,37 @@ JoystickEvents JoyEvents;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("=== USB Joystick Debug - Turtle Beach VelocityOne ===");
-  Serial.println("Comprehensive debugging for USB connection issues");
+  Serial.println("=== USB Joystick Channel Monitor ===");
   Serial.println("Waiting for joystick connection...");
 
   // Initialize all channels to center position
   for (int i = 0; i < NUM_CHANNELS; i++) {
-    channel_values[i] = 1500;
-    previous_channel_values[i] = 1500;
+    channel_values[i] = 1500; // Center position
+    previous_channel_values[i] = 1500; // Initialize previous values
   }
 
   // Initialize the USB Host Shield
-  Serial.println("Initializing USB Host Shield...");
   if (Usb.Init() == -1) {
     Serial.println("USB Host Shield initialization failed!");
-    Serial.println("Check your wiring:");
-    Serial.println("- INT pin (usually pin 7)");
-    Serial.println("- SS pin (usually pin 10)");
-    Serial.println("- MOSI, MISO, SCK pins");
-    Serial.println("- Power and ground connections");
-    while (1);
+    while (1); // Halt
   }
-  Serial.println("USB Host Shield Initialized Successfully");
+  Serial.println("USB Host Shield Initialized");
+  Serial.println("Connect your Turtle Beach VelocityOne Flightstick...");
 
   // Set the HID parser
   Hid.SetReportParser(0, &JoyEvents);
   
-  Serial.println("\n=== Debug Monitor Ready ===");
-  Serial.println("System will check for USB devices every 2 seconds");
-  Serial.println("Move joystick axes to see changes...");
+  Serial.println("\n=== USB Joystick Channel Monitor ===");
+  Serial.println("Waiting for joystick input...");
+  Serial.println("Display will show only when channels change");
+  Serial.println("Format: Channel Name: Previous -> Current (us) | % | Visual Bar");
   Serial.println("=============================================");
+  Serial.println("Move joystick axes to see data...");
 }
 
 void loop() {
   // This task must be called continuously to keep the USB stack running.
   Usb.Task();
-
-  // Check for device connection every 2 seconds
-  if (millis() - last_device_check > 2000) {
-    checkDeviceStatus();
-    last_device_check = millis();
-  }
 
   // Only display if channels have changed
   if (channels_changed) {
@@ -169,45 +181,13 @@ void loop() {
       previous_channel_values[i] = channel_values[i];
     }
   }
-}
-
-void checkDeviceStatus() {
-  Serial.println("\n=== Device Status Check ===");
   
-  // Check if any USB device is connected
-  if (Usb.getUsbTaskState() == USB_STATE_RUNNING) {
-    Serial.println("USB Host Shield: RUNNING");
-    
-    // Check if HID device is found
-    if (Hid.isReady()) {
-      Serial.println("HID Device: CONNECTED");
-      hid_device_found = true;
-      
-      // Get device information
-      Serial.print("Device VID: 0x");
-      Serial.println(Hid.getVID(), HEX);
-      Serial.print("Device PID: 0x");
-      Serial.println(Hid.getPID(), HEX);
-      
-    } else {
-      Serial.println("HID Device: NOT FOUND");
-      hid_device_found = false;
-      
-      // Troubleshooting tips
-      Serial.println("Troubleshooting:");
-      Serial.println("1. Make sure joystick is powered on");
-      Serial.println("2. Try unplugging and reconnecting the joystick");
-      Serial.println("3. Check if joystick works on a computer");
-      Serial.println("4. Try a different USB cable");
-      Serial.println("5. Check USB Host Shield power supply");
-    }
-  } else {
-    Serial.println("USB Host Shield: NOT RUNNING");
-    Serial.print("USB State: ");
-    Serial.println(Usb.getUsbTaskState());
+  // Add a heartbeat to show the system is running
+  static unsigned long last_heartbeat = 0;
+  if (millis() - last_heartbeat > 5000) { // Every 5 seconds
+    Serial.println("System running - waiting for joystick data...");
+    last_heartbeat = millis();
   }
-  
-  Serial.println("================================");
 }
 
 void displayChannelValues() {
@@ -254,4 +234,21 @@ void displayChannelValues() {
   }
   
   Serial.println("=============================================");
+}
+
+// Alternative display function for simpler output
+void displaySimpleValues() {
+  Serial.println("--- Channel Values ---");
+  for (int i = 0; i < 8; i++) { // Show first 8 channels
+    Serial.print(channel_names[i]);
+    Serial.print(": ");
+    Serial.print(channel_values[i]);
+    Serial.print("us");
+    if (i % 2 == 1) {
+      Serial.println(); // New line every 2 channels
+    } else {
+      Serial.print("\t\t");
+    }
+  }
+  Serial.println();
 }
