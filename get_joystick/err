@@ -1,0 +1,67 @@
+Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void scanForDevices()':
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:73:10: error: 'USB_STATE_ATTACHED' was not declared in this scope
+     case USB_STATE_ATTACHED:
+          ^~~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:73:10: note: suggested alternative: 'USB_STATE_DETACHED'
+     case USB_STATE_ATTACHED:
+          ^~~~~~~~~~~~~~~~~~
+          USB_STATE_DETACHED
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:76:10: error: 'USB_STATE_POWERED' was not declared in this scope
+     case USB_STATE_POWERED:
+          ^~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:76:10: note: suggested alternative: 'USB_STATE_DETACHED'
+     case USB_STATE_POWERED:
+          ^~~~~~~~~~~~~~~~~
+          USB_STATE_DETACHED
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:79:10: error: 'USB_STATE_DEFAULT' was not declared in this scope
+     case USB_STATE_DEFAULT:
+          ^~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:79:10: note: suggested alternative: 'USB_NAK_DEFAULT'
+     case USB_STATE_DEFAULT:
+          ^~~~~~~~~~~~~~~~~
+          USB_NAK_DEFAULT
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:82:10: error: 'USB_STATE_ADDRESS' was not declared in this scope
+     case USB_STATE_ADDRESS:
+          ^~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:82:10: note: suggested alternative: 'USB_STATE_ADDRESSING'
+     case USB_STATE_ADDRESS:
+          ^~~~~~~~~~~~~~~~~
+          USB_STATE_ADDRESSING
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:85:10: error: 'USB_STATE_CONFIGURED' was not declared in this scope
+     case USB_STATE_CONFIGURED:
+          ^~~~~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:85:10: note: suggested alternative: 'USB_STATE_CONFIGURING'
+     case USB_STATE_CONFIGURED:
+          ^~~~~~~~~~~~~~~~~~~~
+          USB_STATE_CONFIGURING
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:88:10: error: 'USB_STATE_SUSPENDED' was not declared in this scope
+     case USB_STATE_SUSPENDED:
+          ^~~~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:88:10: note: suggested alternative: 'USB_STATE_RUNNING'
+     case USB_STATE_SUSPENDED:
+          ^~~~~~~~~~~~~~~~~~~
+          USB_STATE_RUNNING
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:103:24: error: 'class HIDUniversal' has no member named 'getVID'; did you mean 'VID'?
+     Serial.println(Hid.getVID(), HEX);
+                        ^~~~~~
+                        VID
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:105:24: error: 'class HIDUniversal' has no member named 'getPID'; did you mean 'PID'?
+     Serial.println(Hid.getPID(), HEX);
+                        ^~~~~~
+                        PID
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:109:24: error: 'class HIDUniversal' has no member named 'getDevClass'
+     Serial.println(Hid.getDevClass());
+                        ^~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:111:24: error: 'class HIDUniversal' has no member named 'getDevSubClass'
+     Serial.println(Hid.getDevSubClass());
+                        ^~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:113:24: error: 'class HIDUniversal' has no member named 'getDevProtocol'; did you mean 'SetProtocol'?
+     Serial.println(Hid.getDevProtocol());
+                        ^~~~~~~~~~~~~~
+                        SetProtocol
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:120:11: error: 'class USBHub' has no member named 'isReady'
+   if (Hub.isReady()) {
+           ^~~~~~~
+exit status 1
+
+Compilation error: 'USB_STATE_ATTACHED' was not declared in this scope
