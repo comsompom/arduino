@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Simple USB Test
+ * USB Device Scanner
  * 
  * HARDWARE:
  * - Arduino UNO
@@ -9,40 +9,28 @@
  * - USB Host Shield Library 2.0 by felis
  * 
  * DESCRIPTION:
- * Simple test to verify USB Host Shield is working
- * and detect any USB devices.
+ * Simple USB device scanner to identify what devices are connected
+ * and help troubleshoot USB Host Shield issues.
  *
  ******************************************************************************/
 
 #include <hiduniversal.h>
 #include <usbhub.h>
+#include <hidboot.h>
 
 // -- USB Host Shield Setup --
 USB Usb;
 USBHub Hub(&Usb);
 HIDUniversal Hid(&Usb);
 
-// Simple parser class
-class SimpleParser : public HIDReportParser {
-public:
-  void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf) {
-    Serial.print("Data received - Length: ");
-    Serial.print(len);
-    Serial.print(" bytes: ");
-    for (uint8_t i = 0; i < len; i++) {
-      Serial.print(buf[i], HEX);
-      Serial.print(" ");
-    }
-    Serial.println();
-  }
-};
-
-SimpleParser Parser;
+// Device tracking
+unsigned long last_scan = 0;
+int device_count = 0;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("=== Simple USB Test ===");
-  Serial.println("Testing USB Host Shield...");
+  Serial.println("=== USB Device Scanner ===");
+  Serial.println("Scanning for USB devices...");
 
   // Initialize the USB Host Shield
   Serial.println("Initializing USB Host Shield...");
@@ -57,11 +45,8 @@ void setup() {
   }
   Serial.println("USB Host Shield Initialized Successfully");
   
-  // Set the parser
-  Hid.SetReportParser(0, &Parser);
-  
-  Serial.println("\n=== Test Ready ===");
-  Serial.println("Connect USB devices to see if they're detected");
+  Serial.println("\n=== Scanner Ready ===");
+  Serial.println("Connect USB devices to see them detected");
   Serial.println("=============================================");
 }
 
@@ -69,43 +54,60 @@ void loop() {
   // This task must be called continuously to keep the USB stack running.
   Usb.Task();
 
-  // Simple status check every 5 seconds
-  static unsigned long last_check = 0;
-  if (millis() - last_check > 5000) {
-    Serial.println("\n=== Status Check ===");
+  // Scan for devices every 3 seconds
+  if (millis() - last_scan > 3000) {
+    scanForDevices();
+    last_scan = millis();
+  }
+}
+
+void scanForDevices() {
+  Serial.println("\n=== USB Device Scan ===");
+  
+  // Check USB Host Shield status
+  Serial.print("USB Host Shield State: ");
+  switch (Usb.getUsbTaskState()) {
+    case USB_STATE_DETACHED:
+      Serial.println("DETACHED");
+      break;
+    case USB_STATE_ADDRESSING:
+      Serial.println("ADDRESSING");
+      break;
+    case USB_STATE_CONFIGURING:
+      Serial.println("CONFIGURING");
+      break;
+    case USB_STATE_RUNNING:
+      Serial.println("RUNNING");
+      break;
+    default:
+      Serial.println("UNKNOWN");
+      break;
+  }
+  
+  // Check if HID device is connected
+  if (Hid.isReady()) {
+    Serial.println("HID Device: CONNECTED");
+    Serial.print("VID: 0x");
+    Serial.println(Hid.VID, HEX);
+    Serial.print("PID: 0x");
+    Serial.println(Hid.PID, HEX);
     
-    // Check USB state
-    Serial.print("USB State: ");
-    switch (Usb.getUsbTaskState()) {
-      case USB_STATE_DETACHED:
-        Serial.println("DETACHED");
-        break;
-      case USB_STATE_ADDRESSING:
-        Serial.println("ADDRESSING");
-        break;
-      case USB_STATE_CONFIGURING:
-        Serial.println("CONFIGURING");
-        break;
-      case USB_STATE_RUNNING:
-        Serial.println("RUNNING");
-        break;
-      default:
-        Serial.println("UNKNOWN");
-        break;
-    }
-    
-    // Check if HID device is ready
-    if (Hid.isReady()) {
-      Serial.println("HID Device: CONNECTED");
-      Serial.print("VID: 0x");
-      Serial.println(Hid.VID, HEX);
-      Serial.print("PID: 0x");
-      Serial.println(Hid.PID, HEX);
-    } else {
-      Serial.println("HID Device: NOT FOUND");
-    }
-    
-    Serial.println("=====================");
-    last_check = millis();
+  } else {
+    Serial.println("HID Device: NOT FOUND");
+  }
+  
+  Serial.println("================================");
+  
+  // Provide troubleshooting tips
+  if (!Hid.isReady()) {
+    Serial.println("Troubleshooting Tips:");
+    Serial.println("1. Make sure your device is powered on");
+    Serial.println("2. Try unplugging and reconnecting the device");
+    Serial.println("3. Check if the device works on a computer");
+    Serial.println("4. Try a different USB cable");
+    Serial.println("5. Check USB Host Shield power supply (5V)");
+    Serial.println("6. Verify all USB Host Shield connections");
+    Serial.println("7. Some devices may not be compatible");
+    Serial.println();
   }
 }
