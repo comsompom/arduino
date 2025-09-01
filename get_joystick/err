@@ -1,59 +1,11 @@
-Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In member function 'virtual uint8_t DevDesc::ConfigureDevice(uint8_t, uint8_t, bool)':
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:61:5: error: 'Address' was not declared in this scope
-     Address.parent = parent;
-     ^~~~~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:61:5: note: suggested alternative: 'GetAddress'
-     Address.parent = parent;
-     ^~~~~~~
-     GetAddress
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:65:13: error: 'pUsb' was not declared in this scope
-     rcode = pUsb->getDevDescr(1, 0, 0x12, (uint8_t*) & buf); //get device descriptor
-             ^~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:65:56: error: 'buf' was not declared in this scope
-     rcode = pUsb->getDevDescr(1, 0, 0x12, (uint8_t*) & buf); //get device descriptor
-                                                        ^~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In member function 'void DevDesc::PrintAllDescriptors(uint8_t)':
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:82:13: error: 'pUsb' was not declared in this scope
-     rcode = pUsb->getConfDescr(addr, 0, 4, 0, buf);
-             ^~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:82:47: error: 'buf' was not declared in this scope
-     rcode = pUsb->getConfDescr(addr, 0, 4, 0, buf);
-                                               ^~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:117:19: error: 'HID_DESCRIPTOR_REPORT' was not declared in this scope
-             case (HID_DESCRIPTOR_REPORT):
-                   ^~~~~~~~~~~~~~~~~~~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:117:19: note: suggested alternative: 'HID_DESCRIPTOR_HID'
-             case (HID_DESCRIPTOR_REPORT):
-                   ^~~~~~~~~~~~~~~~~~~~~
-                   HID_DESCRIPTOR_HID
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:120:19: error: 'CS_INTERFACE' was not declared in this scope
-             case (CS_INTERFACE):
-                   ^~~~~~~~~~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:120:19: note: suggested alternative: 'INTERNAL'
-             case (CS_INTERFACE):
-                   ^~~~~~~~~~~~
-                   INTERNAL
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:123:19: error: 'CS_ENDPOINT' was not declared in this scope
-             case (CS_ENDPOINT):
-                   ^~~~~~~~~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void setup()':
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:152:9: error: 'class DevDesc' has no member named 'SetAddress'; did you mean 'GetAddress'?
-     Dev.SetAddress(1);
-         ^~~~~~~~~~
-         GetAddress
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:153:21: error: no matching function for call to 'USB::SetAddress(int)'
-     Usb.SetAddress(0);
-                     ^
-In file included from /Users/olegbourdo/Documents/Arduino/libraries/USB_Host_Shield_Library_2.0/Usb.h:44:0,
-                 from /Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:40:
-/Users/olegbourdo/Documents/Arduino/libraries/USB_Host_Shield_Library_2.0/UsbCore.h:284:17: note: candidate: uint8_t USB::SetAddress(uint8_t, uint8_t, EpInfo**, uint16_t*)
-         uint8_t SetAddress(uint8_t addr, uint8_t ep, EpInfo **ppep, uint16_t *nak_limit);
-                 ^~~~~~~~~~
-/Users/olegbourdo/Documents/Arduino/libraries/USB_Host_Shield_Library_2.0/UsbCore.h:284:17: note:   candidate expects 4 arguments, 1 provided
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:154:9: error: 'class USB' has no member named 'SetEventHandler'; did you mean 'IntHandler'?
-     Usb.SetEventHandler(&Dev);
-         ^~~~~~~~~~~~~~~
-         IntHandler
+Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void switchToLoopMode()':
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:361:3: error: 'displayChannelMappings' was not declared in this scope
+   displayChannelMappings();
+   ^~~~~~~~~~~~~~~~~~~~~~
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:361:3: note: suggested alternative: 'ChannelMapping'
+   displayChannelMappings();
+   ^~~~~~~~~~~~~~~~~~~~~~
+   ChannelMapping
 exit status 1
 
-Compilation error: 'Address' was not declared in this scope
+Compilation error: 'displayChannelMappings' was not declared in this scope
