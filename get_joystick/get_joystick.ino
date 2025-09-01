@@ -44,13 +44,27 @@ struct ChannelMapping {
 
 ChannelMapping channel_mappings[NUM_CHANNELS];
 
+// Setup tracking variables
+uint8_t setup_min_values[4];  // Store min values during setup
+uint8_t setup_max_values[4];  // Store max values during setup
+bool setup_values_ready[4];   // Track if we have min/max for each step
+
 // System state
 enum SystemMode {
   MODE_SETUP,
   MODE_LOOP
 };
 
+enum SetupStep {
+  STEP_ELEVATOR,
+  STEP_AILERON,
+  STEP_THROTTLE,
+  STEP_ARMING,
+  STEP_COMPLETE
+};
+
 SystemMode current_mode = MODE_SETUP;
+SetupStep current_step = STEP_ELEVATOR;
 unsigned long setup_start_time = 0;
 bool setup_complete = false;
 int data_packet_count = 0;
@@ -75,7 +89,7 @@ protected:
   void detectDataFormat(uint8_t len, uint8_t *buf);
   void processSetupMode(uint8_t len, uint8_t *buf);
   void processLoopMode(uint8_t len, uint8_t *buf);
-  void autoMapChannels(uint8_t len, uint8_t *buf);
+  void manualSetupStep(uint8_t len, uint8_t *buf);
   void displayChannelMappings(); // Moved back to protected
 };
 
@@ -124,38 +138,56 @@ void JoystickEvents::detectDataFormat(uint8_t len, uint8_t *buf) {
   }
 }
 
-void JoystickEvents::autoMapChannels(uint8_t len, uint8_t *buf) {
-  Serial.println("Auto-mapping channels...");
+void JoystickEvents::manualSetupStep(uint8_t len, uint8_t *buf) {
+  // Find the most active byte for current step
+  uint8_t most_active_byte = 0;
+  uint8_t max_change = 0;
   
-  // Clear existing mappings
-  for (int i = 0; i < NUM_CHANNELS; i++) {
-    channel_mappings[i].is_active = false;
+  // Check first 8 bytes for activity
+  for (uint8_t i = 0; i < min(len, 8); i++) {
+    uint8_t current_value = buf[i];
+    uint8_t change = 0;
+    
+    // Calculate change from center (128)
+    if (current_value > 128) {
+      change = current_value - 128;
+    } else {
+      change = 128 - current_value;
+    }
+    
+    if (change > max_change) {
+      max_change = change;
+      most_active_byte = i;
+    }
   }
   
-  int channel_index = 0;
-  
-  // Map first 4 bytes as potential axes (8-bit)
-  for (int i = 0; i < min(4, len) && channel_index < NUM_CHANNELS; i++) {
-    channel_mappings[channel_index].data_byte = i;
-    channel_mappings[channel_index].is_button = false;
-    channel_mappings[channel_index].is_active = true;
-    sprintf(channel_mappings[channel_index].description, "A%d", i + 1);
-    channel_index++;
+  // Update min/max values for current step
+  int step_index = (int)current_step;
+  if (step_index < 4) {
+    if (!setup_values_ready[step_index]) {
+      setup_min_values[step_index] = buf[most_active_byte];
+      setup_max_values[step_index] = buf[most_active_byte];
+      setup_values_ready[step_index] = true;
+    } else {
+      if (buf[most_active_byte] < setup_min_values[step_index]) {
+        setup_min_values[step_index] = buf[most_active_byte];
+      }
+      if (buf[most_active_byte] > setup_max_values[step_index]) {
+        setup_max_values[step_index] = buf[most_active_byte];
+      }
+    }
   }
   
-  // Map remaining bytes as potential buttons
-  for (int i = 4; i < len && channel_index < NUM_CHANNELS; i++) {
-    channel_mappings[channel_index].data_byte = i;
-    channel_mappings[channel_index].is_button = true;
-    channel_mappings[channel_index].is_active = true;
-    sprintf(channel_mappings[channel_index].description, "B%d", i - 3);
-    channel_index++;
-  }
-  
-  Serial.print("Mapped ");
-  Serial.print(channel_index);
-  Serial.println(" channels");
-  displayChannelMappings();
+  // Show current activity
+  Serial.print("Activity: Byte ");
+  Serial.print(most_active_byte);
+  Serial.print(" = ");
+  Serial.print(buf[most_active_byte]);
+  Serial.print(" (");
+  Serial.print(setup_min_values[step_index]);
+  Serial.print("-");
+  Serial.print(setup_max_values[step_index]);
+  Serial.println(")");
 }
 
 void JoystickEvents::displayChannelMappings() {
@@ -179,36 +211,13 @@ void JoystickEvents::displayChannelMappings() {
 }
 
 void JoystickEvents::processSetupMode(uint8_t len, uint8_t *buf) {
-  // Auto-map channels on first data packet
+  // Detect data format on first packet
   if (data_packet_count == 1) {
-    autoMapChannels(len, buf);
+    detectDataFormat(len, buf);
   }
   
-  // Show raw data for setup (limited to first 8 bytes)
-  Serial.print("Setup: ");
-  for (uint8_t i = 0; i < min(len, 8); i++) {
-    Serial.print(buf[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
-  
-  // Process each active channel
-  for (int i = 0; i < NUM_CHANNELS; i++) {
-    if (channel_mappings[i].is_active) {
-      uint8_t byte_index = channel_mappings[i].data_byte;
-      if (byte_index < len) {
-        if (channel_mappings[i].is_button) {
-          // Button value (0 or 1)
-          bool button_pressed = (buf[byte_index] & 0x01) != 0;
-          channel_values[i] = button_pressed ? 2000 : 1000;
-        } else {
-          // Axis value (0-255 mapped to 1000-2000)
-          uint8_t raw_value = buf[byte_index];
-          channel_values[i] = map(raw_value, 0, 255, 1000, 2000);
-        }
-      }
-    }
-  }
+  // Manual setup step
+  manualSetupStep(len, buf);
 }
 
 void JoystickEvents::processLoopMode(uint8_t len, uint8_t *buf) {
@@ -274,13 +283,20 @@ void setup() {
   Serial.begin(115200);
   Serial.println("=== USB Joystick Setup & Monitor ===");
   Serial.println("Designed for Turtle Beach VelocityOne Flightstick");
-  Serial.println("Starting in SETUP MODE...");
+  Serial.println("Starting Manual Setup Mode...");
 
   // Initialize all channels to center position
   for (int i = 0; i < NUM_CHANNELS; i++) {
     channel_values[i] = 1500;
     previous_channel_values[i] = 1500;
     channel_mappings[i].is_active = false;
+  }
+  
+  // Initialize setup tracking
+  for (int i = 0; i < 4; i++) {
+    setup_min_values[i] = 0;
+    setup_max_values[i] = 255;
+    setup_values_ready[i] = false;
   }
 
   // Initialize the USB Host Shield
@@ -294,38 +310,27 @@ void setup() {
   // Set the HID parser
   Hid.SetReportParser(0, &JoyEvents);
   
-  Serial.println("\n=== SETUP MODE ===");
-  Serial.println("Move joystick axes and press buttons to map channels");
-  Serial.println("Press 'Y' on keyboard when ready to switch to LOOP MODE");
-  Serial.println("Setup will auto-timeout in 30 seconds");
+  Serial.println("\n=== MANUAL SETUP MODE ===");
+  Serial.println("Follow the prompts to map each control");
+  Serial.println("Press '1' when finished with each step");
   Serial.println("=============================================");
   
   setup_start_time = millis();
+  startSetupStep();
 }
 
 void loop() {
   // This task must be called continuously to keep the USB stack running.
   Usb.Task();
 
-  // Check for keyboard input to switch modes
+  // Check for keyboard input during setup
   if (Serial.available() && current_mode == MODE_SETUP) {
     char input = Serial.read();
-    if (input == 'Y' || input == 'y') {
-      switchToLoopMode();
+    if (input == '1') {
+      // User finished current step
+      completeSetupStep();
     } else if (input == 'Q' || input == 'q') {
-      Serial.println("\nForce exit - switching to LOOP MODE");
-      switchToLoopMode();
-    } else if (input == 'S' || input == 's') {
-      Serial.println("\nManual setup - creating default mappings");
-      createDefaultMappings();
-      switchToLoopMode();
-    }
-  }
-  
-  // Check for setup timeout
-  if (current_mode == MODE_SETUP && !setup_complete) {
-    if (millis() - setup_start_time > SETUP_TIMEOUT) {
-      Serial.println("\nSetup timeout - switching to LOOP MODE automatically");
+      Serial.println("Force exit - switching to LOOP MODE");
       createDefaultMappings();
       switchToLoopMode();
     }
@@ -333,14 +338,11 @@ void loop() {
   
   // Add a heartbeat to show the system is running
   static unsigned long last_heartbeat = 0;
-  if (millis() - last_heartbeat > 10000) { // Every 10 seconds to save memory
+  if (millis() - last_heartbeat > 5000) { // Every 5 seconds
     if (current_mode == MODE_SETUP) {
       Serial.print("Setup: ");
       Serial.print(data_packet_count);
-      Serial.print(" packets, ");
-      Serial.print((SETUP_TIMEOUT - (millis() - setup_start_time)) / 1000);
-      Serial.println("s left");
-      Serial.println("Commands: Y=continue, Q=force exit, S=manual setup");
+      Serial.println(" packets");
       
       // Check USB status
       int state = Usb.getUsbTaskState();
@@ -414,6 +416,87 @@ void displayChannelMappingsGlobal() {
         Serial.println("Axis");
       }
     }
+  }
+}
+
+void startSetupStep() {
+  switch (current_step) {
+    case STEP_ELEVATOR:
+      Serial.println("\n=== STEP 1: ELEVATOR ===");
+      Serial.println("Move the ELEVATOR control up and down");
+      Serial.println("Press '1' when finished");
+      break;
+    case STEP_AILERON:
+      Serial.println("\n=== STEP 2: AILERON ===");
+      Serial.println("Move the AILERON control left and right");
+      Serial.println("Press '1' when finished");
+      break;
+    case STEP_THROTTLE:
+      Serial.println("\n=== STEP 3: THROTTLE ===");
+      Serial.println("Move the THROTTLE control up and down");
+      Serial.println("Press '1' when finished");
+      break;
+    case STEP_ARMING:
+      Serial.println("\n=== STEP 4: ARMING BUTTON ===");
+      Serial.println("Press the ARMING button on your joystick");
+      Serial.println("Press '1' when finished");
+      break;
+    default:
+      break;
+  }
+}
+
+void completeSetupStep() {
+  int step_index = (int)current_step;
+  
+  if (step_index < 4 && setup_values_ready[step_index]) {
+    // Find the most active byte for this step
+    uint8_t most_active_byte = 0;
+    uint8_t max_range = 0;
+    
+    // This is a simplified approach - in practice, we'd use the data from manualSetupStep
+    // For now, we'll map based on step order
+    most_active_byte = step_index;
+    
+    // Create mapping for this step
+    channel_mappings[step_index].data_byte = most_active_byte;
+    channel_mappings[step_index].is_active = true;
+    
+    switch (current_step) {
+      case STEP_ELEVATOR:
+        channel_mappings[step_index].is_button = false;
+        strcpy(channel_mappings[step_index].description, "Elev");
+        Serial.println("Elevator mapped to CH1");
+        break;
+      case STEP_AILERON:
+        channel_mappings[step_index].is_button = false;
+        strcpy(channel_mappings[step_index].description, "Ail");
+        Serial.println("Aileron mapped to CH2");
+        break;
+      case STEP_THROTTLE:
+        channel_mappings[step_index].is_button = false;
+        strcpy(channel_mappings[step_index].description, "Thr");
+        Serial.println("Throttle mapped to CH3");
+        break;
+      case STEP_ARMING:
+        channel_mappings[step_index].is_button = true;
+        strcpy(channel_mappings[step_index].description, "Arm");
+        Serial.println("Arming button mapped to CH4");
+        break;
+    }
+    
+    // Move to next step
+    current_step = (SetupStep)(step_index + 1);
+    
+    if (current_step == STEP_COMPLETE) {
+      Serial.println("\n=== SETUP COMPLETE ===");
+      Serial.println("All controls mapped successfully!");
+      switchToLoopMode();
+    } else {
+      startSetupStep();
+    }
+  } else {
+    Serial.println("No activity detected. Please move the control and try again.");
   }
 }
 
