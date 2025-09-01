@@ -338,27 +338,38 @@ void loop() {
   
   // Add a heartbeat to show the system is running
   static unsigned long last_heartbeat = 0;
-  if (millis() - last_heartbeat > 5000) { // Every 5 seconds
+  if (millis() - last_heartbeat > 3000) { // Every 3 seconds
     if (current_mode == MODE_SETUP) {
-      Serial.print("Setup: ");
+      Serial.print("Status: ");
       Serial.print(data_packet_count);
-      Serial.println(" packets");
+      Serial.print(" packets, Step ");
+      Serial.print((int)current_step + 1);
+      Serial.print("/4");
       
       // Check USB status
       int state = Usb.getUsbTaskState();
-      Serial.print("USB: ");
+      Serial.print(", USB: ");
       switch (state) {
-        case USB_STATE_DETACHED: Serial.println("DETACHED"); break;
-        case USB_STATE_ADDRESSING: Serial.println("ADDRESSING"); break;
-        case USB_STATE_CONFIGURING: Serial.println("CONFIGURING"); break;
-        case USB_STATE_RUNNING: Serial.println("RUNNING"); break;
-        default: Serial.println("UNKNOWN"); break;
+        case USB_STATE_DETACHED: Serial.print("DETACHED"); break;
+        case USB_STATE_ADDRESSING: Serial.print("ADDRESSING"); break;
+        case USB_STATE_CONFIGURING: Serial.print("CONFIGURING"); break;
+        case USB_STATE_RUNNING: Serial.print("RUNNING"); break;
+        default: Serial.print("UNKNOWN"); break;
       }
       
       if (Hid.isReady()) {
-        Serial.println("HID: CONNECTED");
+        Serial.println(", HID: OK");
       } else {
-        Serial.println("HID: NOT FOUND");
+        Serial.println(", HID: NOT FOUND");
+      }
+      
+      // Show current step reminder
+      switch (current_step) {
+        case STEP_ELEVATOR: Serial.println("Current: Move ELEVATOR or press '1'"); break;
+        case STEP_AILERON: Serial.println("Current: Move AILERON or press '1'"); break;
+        case STEP_THROTTLE: Serial.println("Current: Move THROTTLE or press '1'"); break;
+        case STEP_ARMING: Serial.println("Current: Press ARMING button or press '1'"); break;
+        default: break;
       }
     } else {
       Serial.print("Loop: ");
@@ -424,22 +435,26 @@ void startSetupStep() {
     case STEP_ELEVATOR:
       Serial.println("\n=== STEP 1: ELEVATOR ===");
       Serial.println("Move the ELEVATOR control up and down");
-      Serial.println("Press '1' when finished");
+      Serial.println("Press '1' when finished (or 'Q' to skip)");
+      Serial.println("Waiting for joystick activity...");
       break;
     case STEP_AILERON:
       Serial.println("\n=== STEP 2: AILERON ===");
       Serial.println("Move the AILERON control left and right");
-      Serial.println("Press '1' when finished");
+      Serial.println("Press '1' when finished (or 'Q' to skip)");
+      Serial.println("Waiting for joystick activity...");
       break;
     case STEP_THROTTLE:
       Serial.println("\n=== STEP 3: THROTTLE ===");
       Serial.println("Move the THROTTLE control up and down");
-      Serial.println("Press '1' when finished");
+      Serial.println("Press '1' when finished (or 'Q' to skip)");
+      Serial.println("Waiting for joystick activity...");
       break;
     case STEP_ARMING:
       Serial.println("\n=== STEP 4: ARMING BUTTON ===");
       Serial.println("Press the ARMING button on your joystick");
-      Serial.println("Press '1' when finished");
+      Serial.println("Press '1' when finished (or 'Q' to skip)");
+      Serial.println("Waiting for joystick activity...");
       break;
     default:
       break;
@@ -449,14 +464,19 @@ void startSetupStep() {
 void completeSetupStep() {
   int step_index = (int)current_step;
   
-  if (step_index < 4 && setup_values_ready[step_index]) {
+  // Allow proceeding even without activity detected
+  if (step_index < 4) {
     // Find the most active byte for this step
-    uint8_t most_active_byte = 0;
-    uint8_t max_range = 0;
+    uint8_t most_active_byte = step_index; // Default to step order
     
-    // This is a simplified approach - in practice, we'd use the data from manualSetupStep
-    // For now, we'll map based on step order
-    most_active_byte = step_index;
+    // If we have activity data, use it
+    if (setup_values_ready[step_index]) {
+      // In a real implementation, we'd analyze the activity data here
+      // For now, we'll use the step index as the byte position
+      most_active_byte = step_index;
+    } else {
+      Serial.println("No activity detected, using default mapping");
+    }
     
     // Create mapping for this step
     channel_mappings[step_index].data_byte = most_active_byte;
@@ -466,22 +486,22 @@ void completeSetupStep() {
       case STEP_ELEVATOR:
         channel_mappings[step_index].is_button = false;
         strcpy(channel_mappings[step_index].description, "Elev");
-        Serial.println("Elevator mapped to CH1");
+        Serial.println("Elevator mapped to CH1 (Byte " + String(most_active_byte) + ")");
         break;
       case STEP_AILERON:
         channel_mappings[step_index].is_button = false;
         strcpy(channel_mappings[step_index].description, "Ail");
-        Serial.println("Aileron mapped to CH2");
+        Serial.println("Aileron mapped to CH2 (Byte " + String(most_active_byte) + ")");
         break;
       case STEP_THROTTLE:
         channel_mappings[step_index].is_button = false;
         strcpy(channel_mappings[step_index].description, "Thr");
-        Serial.println("Throttle mapped to CH3");
+        Serial.println("Throttle mapped to CH3 (Byte " + String(most_active_byte) + ")");
         break;
       case STEP_ARMING:
         channel_mappings[step_index].is_button = true;
         strcpy(channel_mappings[step_index].description, "Arm");
-        Serial.println("Arming button mapped to CH4");
+        Serial.println("Arming button mapped to CH4 (Byte " + String(most_active_byte) + ")");
         break;
     }
     
@@ -496,7 +516,7 @@ void completeSetupStep() {
       startSetupStep();
     }
   } else {
-    Serial.println("No activity detected. Please move the control and try again.");
+    Serial.println("Setup step error. Press 'Q' to force exit.");
   }
 }
 
