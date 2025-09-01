@@ -73,6 +73,7 @@ class JoystickEvents : public HIDReportParser {
 public:
   JoystickEvents();
   void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf);
+  void displayChannelMappings(); // Made public so it can be called from outside
 
 protected:
   void OnJoystickData(uint8_t len, uint8_t *buf);
@@ -80,7 +81,6 @@ protected:
   void processSetupMode(uint8_t len, uint8_t *buf);
   void processLoopMode(uint8_t len, uint8_t *buf);
   void autoMapChannels(uint8_t len, uint8_t *buf);
-  void displayChannelMappings();
 };
 
 // Constructor for our parser
