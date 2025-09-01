@@ -323,6 +323,13 @@ void loop() {
     char input = Serial.read();
     if (input == 'Y' || input == 'y') {
       switchToLoopMode();
+    } else if (input == 'Q' || input == 'q') {
+      Serial.println("\nForce exit - switching to LOOP MODE");
+      switchToLoopMode();
+    } else if (input == 'S' || input == 's') {
+      Serial.println("\nManual setup - creating default mappings");
+      createDefaultMappings();
+      switchToLoopMode();
     }
   }
   
@@ -330,19 +337,38 @@ void loop() {
   if (current_mode == MODE_SETUP && !setup_complete) {
     if (millis() - setup_start_time > SETUP_TIMEOUT) {
       Serial.println("\nSetup timeout - switching to LOOP MODE automatically");
+      createDefaultMappings();
       switchToLoopMode();
     }
   }
   
   // Add a heartbeat to show the system is running
   static unsigned long last_heartbeat = 0;
-  if (millis() - last_heartbeat > 10000) { // Every 10 seconds
+  if (millis() - last_heartbeat > 5000) { // Every 5 seconds
     if (current_mode == MODE_SETUP) {
       Serial.print("Setup Mode - Packets received: ");
       Serial.print(data_packet_count);
       Serial.print(" - Time remaining: ");
       Serial.print((SETUP_TIMEOUT - (millis() - setup_start_time)) / 1000);
       Serial.println(" seconds");
+      Serial.println("Commands: Y=continue, Q=force exit, S=manual setup");
+      
+      // Check USB status
+      int state = Usb.getUsbTaskState();
+      Serial.print("USB State: ");
+      switch (state) {
+        case USB_STATE_DETACHED: Serial.println("DETACHED"); break;
+        case USB_STATE_ADDRESSING: Serial.println("ADDRESSING"); break;
+        case USB_STATE_CONFIGURING: Serial.println("CONFIGURING"); break;
+        case USB_STATE_RUNNING: Serial.println("RUNNING"); break;
+        default: Serial.println("UNKNOWN"); break;
+      }
+      
+      if (Hid.isReady()) {
+        Serial.println("HID Device: CONNECTED");
+      } else {
+        Serial.println("HID Device: NOT FOUND");
+      }
     } else {
       Serial.print("Loop Mode - Packets received: ");
       Serial.print(data_packet_count);
@@ -350,6 +376,42 @@ void loop() {
     }
     last_heartbeat = millis();
   }
+}
+
+// Create default channel mappings when no joystick data is received
+void createDefaultMappings() {
+  Serial.println("\n=== Creating Default Channel Mappings ===");
+  
+  // Clear existing mappings
+  for (int i = 0; i < NUM_CHANNELS; i++) {
+    channel_mappings[i].is_active = false;
+  }
+  
+  // Create default mappings for common joystick layout
+  // First 4 channels as axes
+  for (int i = 0; i < 4; i++) {
+    channel_mappings[i].data_byte = i;
+    channel_mappings[i].data_length = 1;
+    channel_mappings[i].is_16bit = false;
+    channel_mappings[i].is_button = false;
+    channel_mappings[i].is_active = true;
+    channel_mappings[i].description = "Axis " + String(i + 1);
+  }
+  
+  // Next 8 channels as buttons
+  for (int i = 4; i < 12; i++) {
+    channel_mappings[i].data_byte = i;
+    channel_mappings[i].data_length = 1;
+    channel_mappings[i].is_16bit = false;
+    channel_mappings[i].is_button = true;
+    channel_mappings[i].button_mask = 0x01;
+    channel_mappings[i].button_shift = 0;
+    channel_mappings[i].is_active = true;
+    channel_mappings[i].description = "Button " + String(i - 3);
+  }
+  
+  Serial.println("Created default mappings for 4 axes and 8 buttons");
+  Serial.println("These will be updated when joystick data is received");
 }
 
 // Global function to display channel mappings
