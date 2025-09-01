@@ -1,8 +1,6 @@
-20:20:35.788 -> USB Host Shield Initialized
-20:20:35.788 -> Connect your Turtle Beach VelocityOne Flightstick...
-20:20:35.788 -> 
-20:20:35.788 -> === SETUP MODE ===
-20:20:35.788 -> Move joystick axes and press buttons to map channels
-20:20:35.788 -> Press 'Y' on keyboard when ready to switch to LOOP MODE
-20:20:35.788 -> Setup will auto-timeout in 30 seconds
-20:20:35.821 -> =============================================
+Sketch uses 18414 bytes (57%) of program storage space. Maximum is 32256 bytes.
+Global variables use 2266 bytes (110%) of dynamic memory, leaving -218 bytes for local variables. Maximum is 2048 bytes.
+Not enough memory; see https://support.arduino.cc/hc/en-us/articles/360013825179 for tips on reducing your footprint.
+data section exceeds available space in board
+
+Compilation error: data section exceeds available space in board
