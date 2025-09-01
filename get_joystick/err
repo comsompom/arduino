@@ -1,4 +1,4 @@
-Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void switchToLoopMode()':
+/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void switchToLoopMode()':
 /Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:361:3: error: 'displayChannelMappings' was not declared in this scope
    displayChannelMappings();
    ^~~~~~~~~~~~~~~~~~~~~~
