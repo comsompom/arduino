@@ -73,7 +73,6 @@ class JoystickEvents : public HIDReportParser {
 public:
   JoystickEvents();
   void Parse(USBHID *hid, bool is_rpt_id, uint8_t len, uint8_t *buf);
-  void displayChannelMappings(); // Made public so it can be called from outside
 
 protected:
   void OnJoystickData(uint8_t len, uint8_t *buf);
@@ -81,6 +80,7 @@ protected:
   void processSetupMode(uint8_t len, uint8_t *buf);
   void processLoopMode(uint8_t len, uint8_t *buf);
   void autoMapChannels(uint8_t len, uint8_t *buf);
+  void displayChannelMappings(); // Moved back to protected
 };
 
 // Constructor for our parser
@@ -352,13 +352,35 @@ void loop() {
   }
 }
 
+// Global function to display channel mappings
+void displayChannelMappingsGlobal() {
+  Serial.println("\n=== Current Channel Mappings ===");
+  for (int i = 0; i < NUM_CHANNELS; i++) {
+    if (channel_mappings[i].is_active) {
+      Serial.print("CH");
+      Serial.print(i + 1);
+      Serial.print(": Byte ");
+      Serial.print(channel_mappings[i].data_byte);
+      Serial.print(" (");
+      Serial.print(channel_mappings[i].description);
+      Serial.print(") - ");
+      if (channel_mappings[i].is_button) {
+        Serial.println("Button");
+      } else {
+        Serial.println("Axis");
+      }
+    }
+  }
+  Serial.println("================================");
+}
+
 void switchToLoopMode() {
   current_mode = MODE_LOOP;
   setup_complete = true;
   
   Serial.println("\n=== SWITCHING TO LOOP MODE ===");
   Serial.println("Channel mappings:");
-  displayChannelMappings();
+  displayChannelMappingsGlobal();
   Serial.println("\nNow monitoring channels - move joystick to see changes");
   Serial.println("=============================================");
 }
