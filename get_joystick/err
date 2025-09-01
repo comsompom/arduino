@@ -1,10 +1,6 @@
-20:59:01.698 -> === STEP 1: ELEVATOR ===
-20:59:01.698 -> Move the ELEVATOR contr=== USB Joystick Setup & Monitor ===
-20:59:01.730 -> Designed for Turtle Beach VelocityOne Flightstick
-20:59:01.730 -> Starting Manual Setup Mode...
-20:59:01.730 -> USB Host Shield Initialized
-20:59:01.730 -> Connect your Turtle Beach VelocityOne Flightstick...
-20:59:01.730 -> 
-20:59:01.730 -> === MANUAL SETUP MODE ===
-20:59:01.730 -> Follow the prompts to map each control
-20:59:01.730 -> Press '1' when finished with each step
+Sketch uses 19662 bytes (60%) of program storage space. Maximum is 32256 bytes.
+Global variables use 2263 bytes (110%) of dynamic memory, leaving -215 bytes for local variables. Maximum is 2048 bytes.
+Not enough memory; see https://support.arduino.cc/hc/en-us/articles/360013825179 for tips on reducing your footprint.
+data section exceeds available space in board
+
+Compilation error: data section exceeds available space in board
