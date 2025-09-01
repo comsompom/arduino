@@ -84,20 +84,18 @@
    // e.g., map(raw_elevator, 0x0000, 0xFFFF, 2000, 1000);
    channel_values[1] = map(raw_elevator, 0x0000, 0xFFFF, 1000, 2000);
  
-       // THROTTLE (Corrected: Based on HID data analysis)
-    // Throttle data is in bytes 8-9 (16-bit value)
-    // Throttle at zero:     bytes 8-9 = 0xE0 0x80 = 0x80E0
-    // Throttle at 100%:     bytes 8-9 = 0xFF 0xFF = 0xFFFF
-    // Throttle at 50%:      bytes 8-9 = 0xC0 0x73 = 0x73C0
-    uint16_t raw_throttle = (buf[9] << 8) | buf[8];
-    
-    // Check if this is a valid throttle reading (within expected range)
-    if (raw_throttle >= 0x80E0 && raw_throttle <= 0xFFFF) {
-      // Map throttle to channel value (1000-2000us)
-      // 0x80E0 (zero) -> 1000us
-      // 0xFFFF (100%) -> 2000us
-      channel_values[0] = map(raw_throttle, 0x80E0, 0xFFFF, 1000, 2000);
-    }
+               // THROTTLE (Fixed: Based on HID data analysis)
+     // Throttle data is in bytes 8-9 (16-bit value)
+     // Throttle at zero:     bytes 8-9 = 0xE0 0x80 = 0x80E0
+     // Throttle at 100%:     bytes 8-9 = 0xFF 0xFF = 0xFFFF
+     // Throttle at 50%:      bytes 8-9 = 0xC0 0x73 = 0x73C0
+     uint16_t raw_throttle = (buf[9] << 8) | buf[8];
+     
+     // Always map throttle regardless of range check to see all values
+     // Map throttle to channel value (1000-2000us)
+     // 0x80E0 (zero) -> 1000us
+     // 0xFFFF (100%) -> 2000us
+     channel_values[0] = map(raw_throttle, 0x80E0, 0xFFFF, 1000, 2000);
  
  
        // --- BUTTONS ---
