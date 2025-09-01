@@ -1,11 +1,8 @@
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino: In function 'void switchToLoopMode()':
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:361:3: error: 'displayChannelMappings' was not declared in this scope
-   displayChannelMappings();
-   ^~~~~~~~~~~~~~~~~~~~~~
-/Users/olegbourdo/Documents/Arduino/get_joystick/get_joystick.ino:361:3: note: suggested alternative: 'ChannelMapping'
-   displayChannelMappings();
-   ^~~~~~~~~~~~~~~~~~~~~~
-   ChannelMapping
-exit status 1
-
-Compilation error: 'displayChannelMappings' was not declared in this scope
+20:20:35.788 -> USB Host Shield Initialized
+20:20:35.788 -> Connect your Turtle Beach VelocityOne Flightstick...
+20:20:35.788 -> 
+20:20:35.788 -> === SETUP MODE ===
+20:20:35.788 -> Move joystick axes and press buttons to map channels
+20:20:35.788 -> Press 'Y' on keyboard when ready to switch to LOOP MODE
+20:20:35.788 -> Setup will auto-timeout in 30 seconds
+20:20:35.821 -> =============================================
