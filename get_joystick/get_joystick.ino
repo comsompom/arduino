@@ -20,13 +20,13 @@
 #include <usbhub.h>
 
 // -- Configuration --
-#define NUM_CHANNELS 12      // Reduced from 20 to save memory
-#define MAX_DATA_LENGTH 32   // Reduced from 64 to save memory
+#define NUM_CHANNELS 8       // Further reduced to save memory
+#define MAX_DATA_LENGTH 16   // Further reduced to save memory
 #define SETUP_TIMEOUT 30000  // 30 seconds timeout for setup mode
 
 // Array to hold the values for each channel
-unsigned int channel_values[NUM_CHANNELS];
-unsigned int previous_channel_values[NUM_CHANNELS];
+uint16_t channel_values[NUM_CHANNELS];      // Changed from unsigned int to uint16_t
+uint16_t previous_channel_values[NUM_CHANNELS]; // Changed from unsigned int to uint16_t
 bool channels_changed = false;
 
 // -- USB Host Shield Setup --
@@ -34,12 +34,12 @@ USB Usb;
 USBHub Hub(&Usb);
 HIDUniversal Hid(&Usb);
 
-// Channel mapping storage - optimized for memory
+// Channel mapping storage - further optimized for memory
 struct ChannelMapping {
   uint8_t data_byte;        // Which byte in the data packet
   bool is_button;           // Whether this is a button (0/1) or axis (0-255)
   bool is_active;           // Whether this mapping is active
-  char description[12];     // Fixed-size char array instead of String
+  char description[8];      // Reduced from 12 to 8 characters
 };
 
 ChannelMapping channel_mappings[NUM_CHANNELS];
@@ -91,10 +91,10 @@ void JoystickEvents::detectDataFormat(uint8_t len, uint8_t *buf) {
   data_packet_count++;
   
   if (data_packet_count == 1) {
-    Serial.print("First data packet received - Length: ");
+    Serial.print("Data: ");
     Serial.print(len);
-    Serial.print(" bytes: ");
-    for (uint8_t i = 0; i < len; i++) {
+    Serial.print(" bytes - ");
+    for (uint8_t i = 0; i < min(len, 8); i++) {
       Serial.print(buf[i], HEX);
       Serial.print(" ");
     }
@@ -113,19 +113,19 @@ void JoystickEvents::detectDataFormat(uint8_t len, uint8_t *buf) {
       
       if (looks_like_8bit) {
         detected_format = FORMAT_8BIT;
-        Serial.println("Detected: 8-bit format (0-255)");
+        Serial.println("8-bit format");
       } else {
         detected_format = FORMAT_16BIT;
-        Serial.println("Detected: 16-bit format");
+        Serial.println("16-bit format");
       }
     } else {
-      Serial.println("Warning: Data packet too short for analysis");
+      Serial.println("Short packet");
     }
   }
 }
 
 void JoystickEvents::autoMapChannels(uint8_t len, uint8_t *buf) {
-  Serial.println("\n=== Auto-Mapping Channels ===");
+  Serial.println("Auto-mapping channels...");
   
   // Clear existing mappings
   for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -139,7 +139,7 @@ void JoystickEvents::autoMapChannels(uint8_t len, uint8_t *buf) {
     channel_mappings[channel_index].data_byte = i;
     channel_mappings[channel_index].is_button = false;
     channel_mappings[channel_index].is_active = true;
-    sprintf(channel_mappings[channel_index].description, "Axis%d", i + 1);
+    sprintf(channel_mappings[channel_index].description, "A%d", i + 1);
     channel_index++;
   }
   
@@ -148,35 +148,34 @@ void JoystickEvents::autoMapChannels(uint8_t len, uint8_t *buf) {
     channel_mappings[channel_index].data_byte = i;
     channel_mappings[channel_index].is_button = true;
     channel_mappings[channel_index].is_active = true;
-    sprintf(channel_mappings[channel_index].description, "Btn%d", i - 3);
+    sprintf(channel_mappings[channel_index].description, "B%d", i - 3);
     channel_index++;
   }
   
-  Serial.print("Auto-mapped ");
+  Serial.print("Mapped ");
   Serial.print(channel_index);
   Serial.println(" channels");
   displayChannelMappings();
 }
 
 void JoystickEvents::displayChannelMappings() {
-  Serial.println("\n=== Current Channel Mappings ===");
+  Serial.println("Channel mappings:");
   for (int i = 0; i < NUM_CHANNELS; i++) {
     if (channel_mappings[i].is_active) {
       Serial.print("CH");
       Serial.print(i + 1);
-      Serial.print(": Byte ");
-      Serial.print(channel_mappings[i].data_byte);
-      Serial.print(" (");
+      Serial.print(": ");
       Serial.print(channel_mappings[i].description);
-      Serial.print(") - ");
+      Serial.print(" (");
+      Serial.print(channel_mappings[i].data_byte);
+      Serial.print(") ");
       if (channel_mappings[i].is_button) {
-        Serial.println("Button");
+        Serial.println("Btn");
       } else {
         Serial.println("Axis");
       }
     }
   }
-  Serial.println("================================");
 }
 
 void JoystickEvents::processSetupMode(uint8_t len, uint8_t *buf) {
@@ -185,9 +184,9 @@ void JoystickEvents::processSetupMode(uint8_t len, uint8_t *buf) {
     autoMapChannels(len, buf);
   }
   
-  // Show raw data for setup
-  Serial.print("Setup Mode - Data: ");
-  for (uint8_t i = 0; i < len; i++) {
+  // Show raw data for setup (limited to first 8 bytes)
+  Serial.print("Setup: ");
+  for (uint8_t i = 0; i < min(len, 8); i++) {
     Serial.print(buf[i], HEX);
     Serial.print(" ");
   }
@@ -370,7 +369,7 @@ void loop() {
 
 // Create default channel mappings when no joystick data is received
 void createDefaultMappings() {
-  Serial.println("\n=== Creating Default Channel Mappings ===");
+  Serial.println("Creating default mappings...");
   
   // Clear existing mappings
   for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -383,50 +382,46 @@ void createDefaultMappings() {
     channel_mappings[i].data_byte = i;
     channel_mappings[i].is_button = false;
     channel_mappings[i].is_active = true;
-    sprintf(channel_mappings[i].description, "Axis%d", i + 1);
+    sprintf(channel_mappings[i].description, "A%d", i + 1);
   }
   
-  // Next 8 channels as buttons
-  for (int i = 4; i < 12; i++) {
+  // Next 4 channels as buttons
+  for (int i = 4; i < 8; i++) {
     channel_mappings[i].data_byte = i;
     channel_mappings[i].is_button = true;
     channel_mappings[i].is_active = true;
-    sprintf(channel_mappings[i].description, "Btn%d", i - 3);
+    sprintf(channel_mappings[i].description, "B%d", i - 3);
   }
   
-  Serial.println("Created default mappings for 4 axes and 8 buttons");
-  Serial.println("These will be updated when joystick data is received");
+  Serial.println("Default: 4 axes, 4 buttons");
 }
 
 // Global function to display channel mappings
 void displayChannelMappingsGlobal() {
-  Serial.println("\n=== Current Channel Mappings ===");
+  Serial.println("Channel mappings:");
   for (int i = 0; i < NUM_CHANNELS; i++) {
     if (channel_mappings[i].is_active) {
       Serial.print("CH");
       Serial.print(i + 1);
-      Serial.print(": Byte ");
-      Serial.print(channel_mappings[i].data_byte);
-      Serial.print(" (");
+      Serial.print(": ");
       Serial.print(channel_mappings[i].description);
-      Serial.print(") - ");
+      Serial.print(" (");
+      Serial.print(channel_mappings[i].data_byte);
+      Serial.print(") ");
       if (channel_mappings[i].is_button) {
-        Serial.println("Button");
+        Serial.println("Btn");
       } else {
         Serial.println("Axis");
       }
     }
   }
-  Serial.println("================================");
 }
 
 void switchToLoopMode() {
   current_mode = MODE_LOOP;
   setup_complete = true;
   
-  Serial.println("\n=== SWITCHING TO LOOP MODE ===");
-  Serial.println("Channel mappings:");
+  Serial.println("Switching to LOOP MODE");
   displayChannelMappingsGlobal();
-  Serial.println("\nNow monitoring channels - move joystick to see changes");
-  Serial.println("=============================================");
+  Serial.println("Monitoring channels - move joystick");
 }
