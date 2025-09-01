@@ -20,8 +20,8 @@
 #include <usbhub.h>
 
 // -- Configuration --
-#define NUM_CHANNELS 20      // Total number of channels to monitor
-#define MAX_DATA_LENGTH 64   // Maximum data packet length
+#define NUM_CHANNELS 12      // Reduced from 20 to save memory
+#define MAX_DATA_LENGTH 32   // Reduced from 64 to save memory
 #define SETUP_TIMEOUT 30000  // 30 seconds timeout for setup mode
 
 // Array to hold the values for each channel
@@ -34,16 +34,12 @@ USB Usb;
 USBHub Hub(&Usb);
 HIDUniversal Hid(&Usb);
 
-// Channel mapping storage
+// Channel mapping storage - optimized for memory
 struct ChannelMapping {
   uint8_t data_byte;        // Which byte in the data packet
-  uint8_t data_length;      // How many bytes this channel uses
-  bool is_16bit;            // Whether this is a 16-bit value
   bool is_button;           // Whether this is a button (0/1) or axis (0-255)
-  uint8_t button_mask;      // For buttons: which bit to check
-  uint8_t button_shift;     // For buttons: how many bits to shift
   bool is_active;           // Whether this mapping is active
-  String description;       // Human-readable description
+  char description[12];     // Fixed-size char array instead of String
 };
 
 ChannelMapping channel_mappings[NUM_CHANNELS];
@@ -141,24 +137,18 @@ void JoystickEvents::autoMapChannels(uint8_t len, uint8_t *buf) {
   // Map first 4 bytes as potential axes (8-bit)
   for (int i = 0; i < min(4, len) && channel_index < NUM_CHANNELS; i++) {
     channel_mappings[channel_index].data_byte = i;
-    channel_mappings[channel_index].data_length = 1;
-    channel_mappings[channel_index].is_16bit = false;
     channel_mappings[channel_index].is_button = false;
     channel_mappings[channel_index].is_active = true;
-    channel_mappings[channel_index].description = "Axis " + String(i + 1);
+    sprintf(channel_mappings[channel_index].description, "Axis%d", i + 1);
     channel_index++;
   }
   
   // Map remaining bytes as potential buttons
   for (int i = 4; i < len && channel_index < NUM_CHANNELS; i++) {
     channel_mappings[channel_index].data_byte = i;
-    channel_mappings[channel_index].data_length = 1;
-    channel_mappings[channel_index].is_16bit = false;
     channel_mappings[channel_index].is_button = true;
-    channel_mappings[channel_index].button_mask = 0x01;
-    channel_mappings[channel_index].button_shift = 0;
     channel_mappings[channel_index].is_active = true;
-    channel_mappings[channel_index].description = "Button " + String(i - 3);
+    sprintf(channel_mappings[channel_index].description, "Btn%d", i - 3);
     channel_index++;
   }
   
@@ -210,7 +200,7 @@ void JoystickEvents::processSetupMode(uint8_t len, uint8_t *buf) {
       if (byte_index < len) {
         if (channel_mappings[i].is_button) {
           // Button value (0 or 1)
-          bool button_pressed = (buf[byte_index] & channel_mappings[i].button_mask) != 0;
+          bool button_pressed = (buf[byte_index] & 0x01) != 0;
           channel_values[i] = button_pressed ? 2000 : 1000;
         } else {
           // Axis value (0-255 mapped to 1000-2000)
@@ -232,7 +222,7 @@ void JoystickEvents::processLoopMode(uint8_t len, uint8_t *buf) {
         
         if (channel_mappings[i].is_button) {
           // Button value (0 or 1)
-          bool button_pressed = (buf[byte_index] & channel_mappings[i].button_mask) != 0;
+          bool button_pressed = (buf[byte_index] & 0x01) != 0;
           channel_values[i] = button_pressed ? 2000 : 1000;
         } else {
           // Axis value (0-255 mapped to 1000-2000)
@@ -344,18 +334,18 @@ void loop() {
   
   // Add a heartbeat to show the system is running
   static unsigned long last_heartbeat = 0;
-  if (millis() - last_heartbeat > 5000) { // Every 5 seconds
+  if (millis() - last_heartbeat > 10000) { // Every 10 seconds to save memory
     if (current_mode == MODE_SETUP) {
-      Serial.print("Setup Mode - Packets received: ");
+      Serial.print("Setup: ");
       Serial.print(data_packet_count);
-      Serial.print(" - Time remaining: ");
+      Serial.print(" packets, ");
       Serial.print((SETUP_TIMEOUT - (millis() - setup_start_time)) / 1000);
-      Serial.println(" seconds");
+      Serial.println("s left");
       Serial.println("Commands: Y=continue, Q=force exit, S=manual setup");
       
       // Check USB status
       int state = Usb.getUsbTaskState();
-      Serial.print("USB State: ");
+      Serial.print("USB: ");
       switch (state) {
         case USB_STATE_DETACHED: Serial.println("DETACHED"); break;
         case USB_STATE_ADDRESSING: Serial.println("ADDRESSING"); break;
@@ -365,14 +355,14 @@ void loop() {
       }
       
       if (Hid.isReady()) {
-        Serial.println("HID Device: CONNECTED");
+        Serial.println("HID: CONNECTED");
       } else {
-        Serial.println("HID Device: NOT FOUND");
+        Serial.println("HID: NOT FOUND");
       }
     } else {
-      Serial.print("Loop Mode - Packets received: ");
+      Serial.print("Loop: ");
       Serial.print(data_packet_count);
-      Serial.println(" - Monitoring channels...");
+      Serial.println(" packets");
     }
     last_heartbeat = millis();
   }
@@ -391,23 +381,17 @@ void createDefaultMappings() {
   // First 4 channels as axes
   for (int i = 0; i < 4; i++) {
     channel_mappings[i].data_byte = i;
-    channel_mappings[i].data_length = 1;
-    channel_mappings[i].is_16bit = false;
     channel_mappings[i].is_button = false;
     channel_mappings[i].is_active = true;
-    channel_mappings[i].description = "Axis " + String(i + 1);
+    sprintf(channel_mappings[i].description, "Axis%d", i + 1);
   }
   
   // Next 8 channels as buttons
   for (int i = 4; i < 12; i++) {
     channel_mappings[i].data_byte = i;
-    channel_mappings[i].data_length = 1;
-    channel_mappings[i].is_16bit = false;
     channel_mappings[i].is_button = true;
-    channel_mappings[i].button_mask = 0x01;
-    channel_mappings[i].button_shift = 0;
     channel_mappings[i].is_active = true;
-    channel_mappings[i].description = "Button " + String(i - 3);
+    sprintf(channel_mappings[i].description, "Btn%d", i - 3);
   }
   
   Serial.println("Created default mappings for 4 axes and 8 buttons");
