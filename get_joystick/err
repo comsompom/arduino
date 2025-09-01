@@ -1,6 +1,18 @@
-Sketch uses 19662 bytes (60%) of program storage space. Maximum is 32256 bytes.
-Global variables use 2263 bytes (110%) of dynamic memory, leaving -215 bytes for local variables. Maximum is 2048 bytes.
-Not enough memory; see https://support.arduino.cc/hc/en-us/articles/360013825179 for tips on reducing your footprint.
-data section exceeds available space in board
+no signals:        HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 0 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B8 pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 80 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B7 pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 40 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B6 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 20 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B5 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 10 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B4 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 8 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B3 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 4 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B2 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 2 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Button B1 Pressed: HID Data (len=51): 1 FF 7F 60 81 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 1 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
 
-Compilation error: data section exceeds available space in board
+Throttle at zero:  HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 0 A 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Throttle start:    HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F 0 0 0 0 FF 7F 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Throttle at 50%:   HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F C0 73 0 0 FF 7F 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Throttle 100%:     HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F FF FF 0 0 FF 7F 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Trottle 65-78%:    HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F 40 D8 0 0 FF 7F 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Throttle 18-30%:   HID Data (len=51): 1 FF 7F E0 80 FF 7F FF 7F FF 7F C0 43 0 0 FF 7F 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+
+
