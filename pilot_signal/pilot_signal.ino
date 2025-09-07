@@ -26,7 +26,7 @@
 #include <usbhub.h>
 
 // -- PPM Configuration --
-#define PPM_PIN 9           // Digital pin for PPM output
+#define PPM_PIN 8           // Digital pin for PPM output
 #define NUM_CHANNELS 12     // Total number of channels (same as get_joystick.ino)
 #define PPM_FRAME_LENGTH 22500 // Total PPM frame time in microseconds (22.5ms)
 #define PPM_PULSE_LENGTH 300   // Pulse length in microseconds
