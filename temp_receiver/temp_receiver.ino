@@ -18,8 +18,9 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Variables to store temperature values
-float temp1 = 0.0;
-float temp2 = 0.0;
+float bmpTemp = 0.0;
+float tmp36Temp1 = 0.0;
+float tmp36Temp2 = 0.0;
 int rssi = 0;
 unsigned long lastUpdateTime = 0;
 
@@ -27,7 +28,8 @@ void setup() {
   Serial.begin(9600);
   delay(1000); // Give serial time to initialize
   
-  Serial.println("LoRa Temperature Receiver Starting...");
+  Serial.println("=== LoRa Multi-Temperature Receiver ===");
+  Serial.println("Initializing receiver...");
 
   // --- Initialize I2C ---
   Wire.begin();
@@ -53,42 +55,22 @@ void setup() {
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Testing LCD...");
-  delay(1000);
   
   // Simple test - if we can write to LCD, assume it's working
   lcdInitialized = true;
   Serial.println("LCD initialized successfully at 0x27");
   
-  // Test with a simple pattern to verify it's working
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("LCD Test");
-  lcd.setCursor(0, 1);
-  lcd.print("1234567890123456");
-  delay(2000);
-  
-  // If we get here without errors, LCD is working
-  Serial.println("LCD test pattern displayed successfully!");
-  
   // Clear and show initial message
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("LoRa Receiver");
+  lcd.print("Temp Receiver");
   lcd.setCursor(0, 1);
   lcd.print("Waiting for data...");
   
   Serial.println("LCD Initialized Successfully!");
-  
-  // Show the actual message
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("LoRa Receiver");
-  lcd.setCursor(0, 1);
-  lcd.print("Waiting for data...");
 
   // --- Initialize LoRa ---
+  Serial.println("Initializing LoRa receiver...");
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
   if (!LoRa.begin(LORA_FREQUENCY)) {
     Serial.println("Starting LoRa failed!");
@@ -123,6 +105,8 @@ void setup() {
   lcd.print("No Data");
   lcd.setCursor(0, 1);
   lcd.print("Waiting...");
+  
+  Serial.println("Setup Complete! Waiting for multi-temperature data...");
 }
 
 void loop() {
@@ -148,46 +132,39 @@ void loop() {
     lastUpdateTime = millis();
 
     // --- Parse the received string ---
-    // Example format: "T1:23.50,T2:24.12"
+    // Expected format: "BMP:23.45,T1:24.12,T2:25.67"
     bool dataValid = false;
     
-    if (receivedString.indexOf("T1:") != -1 && receivedString.indexOf("T2:") != -1) {
+    if (receivedString.indexOf("BMP:") != -1 && 
+        receivedString.indexOf("T1:") != -1 && 
+        receivedString.indexOf("T2:") != -1) {
+      
+      // Parse BMP085 temperature
+      int bmp_start = receivedString.indexOf("BMP:") + 4;
+      int bmp_end = receivedString.indexOf(",T1:");
+      if (bmp_start >= 4 && bmp_end > bmp_start) {
+        String bmp_str = receivedString.substring(bmp_start, bmp_end);
+        bmpTemp = bmp_str.toFloat();
+      }
+      
+      // Parse TMP36 Sensor 1 temperature
       int t1_start = receivedString.indexOf("T1:") + 3;
       int t1_end = receivedString.indexOf(",T2:");
-      int t2_start = receivedString.indexOf("T2:") + 3;
-
-      if (t1_start >= 3 && t1_end > t1_start && t2_start >= 3) {
-        String temp1_str = receivedString.substring(t1_start, t1_end);
-        String temp2_str = receivedString.substring(t2_start);
-        
-        // Convert to float values
-        temp1 = temp1_str.toFloat();
-        temp2 = temp2_str.toFloat();
-        
-        // Check if conversion was successful (allow 0°C as valid temperature)
-        if (temp1 != 0.0 || temp1_str == "0" || temp1_str == "0.0") {
-          if (temp2 != 0.0 || temp2_str == "0" || temp2_str == "0.0") {
-            dataValid = true;
-          }
-        }
+      if (t1_start >= 3 && t1_end > t1_start) {
+        String t1_str = receivedString.substring(t1_start, t1_end);
+        tmp36Temp1 = t1_str.toFloat();
       }
-    } else if (receivedString.indexOf("T1:") != -1) {
-      // Only T1 data received
-      int t1_start = receivedString.indexOf("T1:") + 3;
-      String temp1_str = receivedString.substring(t1_start);
-      temp1 = temp1_str.toFloat();
-      if (temp1 != 0.0 || temp1_str == "0" || temp1_str == "0.0") {
-        dataValid = true;
-        temp2 = -999.0; // No T2 data
-      }
-    } else if (receivedString.indexOf("T2:") != -1) {
-      // Only T2 data received
+      
+      // Parse TMP36 Sensor 2 temperature
       int t2_start = receivedString.indexOf("T2:") + 3;
-      String temp2_str = receivedString.substring(t2_start);
-      temp2 = temp2_str.toFloat();
-      if (temp2 != 0.0 || temp2_str == "0" || temp2_str == "0.0") {
+      if (t2_start >= 3) {
+        String t2_str = receivedString.substring(t2_start);
+        tmp36Temp2 = t2_str.toFloat();
+      }
+      
+      // Check if all conversions were successful
+      if (bmpTemp != 0.0 || tmp36Temp1 != 0.0 || tmp36Temp2 != 0.0) {
         dataValid = true;
-        temp1 = -999.0; // No T1 data
       }
     }
     
@@ -195,44 +172,26 @@ void loop() {
       // --- Update the LCD Display ---
       lcd.clear();
       
-      // Line 1: First Temperature with Signal Strength
+      // Line 1: TMP36 Sensor 1 and TMP36 Sensor 2 temperatures (integers)
       lcd.setCursor(0, 0);
-      if (temp1 != -999.0) {
-        lcd.print("T1:");
-        lcd.print((int)temp1);
-        lcd.print("C RSSI:");
-        lcd.print(rssi);
-      } else {
-        lcd.print("T1:No Data RSSI:");
-        lcd.print(rssi);
-      }
+      lcd.print((int)tmp36Temp1);
+      lcd.print(":");
+      lcd.print((int)tmp36Temp2);
       
-      // Line 2: Second Temperature with Signal Strength
+      // Line 2: BMP085 temperature and RSSI separated by ":"
       lcd.setCursor(0, 1);
-      if (temp2 != -999.0) {
-        lcd.print("T2:");
-        lcd.print((int)temp2);
-        lcd.print("C RSSI:");
-        lcd.print(rssi);
-      } else {
-        lcd.print("T2:No Data RSSI:");
-        lcd.print(rssi);
-      }
+      lcd.print((int)bmpTemp);
+      lcd.print(":");
+      lcd.print(" RSSI:");
+      lcd.print(rssi);
       
-      Serial.print("Parsed temperatures - T1: ");
-      if (temp1 != -999.0) {
-        Serial.print(temp1);
-        Serial.print("°C");
-      } else {
-        Serial.print("No Data");
-      }
-      Serial.print(", T2: ");
-      if (temp2 != -999.0) {
-        Serial.print(temp2);
-        Serial.println("°C");
-      } else {
-        Serial.println("No Data");
-      }
+      Serial.print("Parsed temperatures - BMP: ");
+      Serial.print(bmpTemp, 2);
+      Serial.print("°C, TMP36-1: ");
+      Serial.print(tmp36Temp1, 2);
+      Serial.print("°C, TMP36-2: ");
+      Serial.print(tmp36Temp2, 2);
+      Serial.println("°C");
     } else {
       Serial.println("Invalid data format received");
     }

@@ -22,6 +22,7 @@
  * CORRECTIONS:
  * - Efficient mathematical throttle mapping using map() function (like elevator/aileron).
  * - Smooth continuous mapping with 25μs discrete rounding for precise control.
+ * - Rudder control system using Button 4 and Button 8 with smooth movement.
  * - Much more efficient than conditional statements - uses simple math operations.
  *
  ******************************************************************************/
@@ -38,19 +39,26 @@
  #define PPM_CHANNEL_MAX 2000   // Maximum channel value (us)
  #define PPM_CHANNEL_MID 1500   // Center channel value (us)
  
- // Array to hold the values for each channel in microseconds
- uint16_t ppm_channels[NUM_CHANNELS];
+// Array to hold the values for each channel in microseconds
+uint16_t ppm_channels[NUM_CHANNELS];
+
+// Global variables for rudder control
+bool button_4_pressed = false;
+bool button_8_pressed = false;
+uint16_t current_rudder_value = 1500;  // Default center position
+unsigned long last_rudder_update = 0;
+const unsigned long RUDDER_UPDATE_INTERVAL = 30;  // 30ms for slower movement (1.5x slower)
  
  // -- USB Host Shield Setup --
  USB Usb;
  USBHub Hub(&Usb);
  HIDUniversal Hid(&Usb);
  
- // Channel names for display
- const char* channel_names[NUM_CHANNELS] = {
-   "Fire", "Throttle", "Elevator", "Aileron", "Button1", "Button2",
-   "Button3", "Button4", "Button5", "Button6", "Button7", "Button8"
- };
+// Channel names for display
+const char* channel_names[NUM_CHANNELS] = {
+  "Fire", "Throttle", "Elevator", "Aileron", "Rudder", "Button1",
+  "Button2", "Button3", "Button5", "Button6", "Button7", "Button8"
+};
  
  // This class is where we parse the joystick's raw data
  class JoystickEvents : public HIDReportParser {
@@ -109,12 +117,20 @@
    }
  
  
-   // --- BUTTONS ---
-   // Buttons B1-B8 are a bitmask in byte 18 -> Channels 5-12
+   // --- RUDDER CONTROL SYSTEM ---
+   // Button 4 (B4) and Button 8 (B8) control rudder on Channel 5
    uint8_t button_byte = buf[18];
+   button_4_pressed = (button_byte & 0x08) != 0;  // B4 (bit 3)
+   button_8_pressed = (button_byte & 0x80) != 0;  // B8 (bit 7)
+   
+   // Note: Rudder channel is updated in updateRudderControl() function
+   
+   // --- OTHER BUTTONS ---
+   // Buttons B1, B2, B3, B5, B6, B7 -> Channels 6-12 (simple on/off)
    for (int i = 0; i < 8; i++) {
+     if (i == 3 || i == 7) continue;  // Skip B4 and B8 (used for rudder)
      bool button_state = (button_byte & (1 << i)) != 0;
-     ppm_channels[i + 4] = button_state ? PPM_CHANNEL_MAX : PPM_CHANNEL_MIN;
+     ppm_channels[i + 5] = button_state ? PPM_CHANNEL_MAX : PPM_CHANNEL_MIN;
    }
  
    // FIRE BUTTON (byte 20, bit 1) -> Channel 1
@@ -151,8 +167,53 @@
    }
  }
  
- // Create an instance of our parser class
- JoystickEvents JoyEvents;
+// Function to handle rudder control independently
+void updateRudderControl() {
+  // Update rudder value only every 30ms for slower movement
+  if (millis() - last_rudder_update >= RUDDER_UPDATE_INTERVAL) {
+    last_rudder_update = millis();
+    
+    uint16_t previous_rudder_value = current_rudder_value;
+    
+    if (button_4_pressed && button_8_pressed) {
+      // Both buttons pressed - return to center (1500)
+      current_rudder_value = 1500;
+    }
+    else if (button_4_pressed && !button_8_pressed) {
+      // Button 4 pressed - slowly move left (1500 to 1200)
+      if (current_rudder_value > 1200) {
+        current_rudder_value = constrain(current_rudder_value - 25, 1200, 1500);
+      }
+    }
+    else if (button_8_pressed && !button_4_pressed) {
+      // Button 8 pressed - slowly move right (1500 to 1800)
+      if (current_rudder_value < 1800) {
+        current_rudder_value = constrain(current_rudder_value + 25, 1500, 1800);
+      }
+    }
+    else {
+      // No buttons pressed - immediate return to center (1500)
+      current_rudder_value = 1500;
+    }
+    
+    // Always update the channel with current rudder value
+    ppm_channels[4] = current_rudder_value;
+    
+    // Debug: Show button states and current rudder value when it changes
+    if (current_rudder_value != previous_rudder_value) {
+      Serial.print("RUDDER: B4=");
+      Serial.print(button_4_pressed ? "ON" : "OFF");
+      Serial.print(" B8=");
+      Serial.print(button_8_pressed ? "ON" : "OFF");
+      Serial.print(" -> ");
+      Serial.print(current_rudder_value);
+      Serial.println("us");
+    }
+  }
+}
+
+// Create an instance of our parser class
+JoystickEvents JoyEvents;
  
  void setup() {
    Serial.begin(115200);
@@ -165,7 +226,8 @@
    ppm_channels[1] = PPM_CHANNEL_MIN;  // Throttle (minimum)
    ppm_channels[2] = PPM_CHANNEL_MID;  // Elevator (center)
    ppm_channels[3] = PPM_CHANNEL_MID;  // Aileron (center)
-   for (int i = 4; i < NUM_CHANNELS; i++) { // Buttons B1-B8 (released)
+   ppm_channels[4] = PPM_CHANNEL_MID;  // Rudder (center - 1500us)
+   for (int i = 5; i < NUM_CHANNELS; i++) { // Buttons B1-B7 (released)
      ppm_channels[i] = PPM_CHANNEL_MIN;
    }
  
@@ -181,10 +243,11 @@
    Hid.SetReportParser(0, &JoyEvents);
  }
  
- void loop() {
-   Usb.Task();
-   generatePpmSignal();
- }
+void loop() {
+  Usb.Task();
+  updateRudderControl();  // Update rudder control independently
+  generatePpmSignal();
+}
  
  // Standard PPM Signal Generation Function
  void generatePpmSignal() {
