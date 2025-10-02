@@ -16,32 +16,6 @@
 // 1: SF7/BW125/CR5 Sync 0x34 (default)
 // 2: SF12/BW125/CR5 Sync 0x34 (longer range)
 // 3: SF12/BW62.5/CR8 Sync 0x12 (compatibility)
-#ifndef LORA_PROFILE
-#define LORA_PROFILE 2
-#endif
-
-static void applyRadioProfile() {
-  if (LORA_PROFILE == 1) {
-    LoRa.setSpreadingFactor(7);
-    LoRa.setSignalBandwidth(125E3);
-    LoRa.setCodingRate4(5);
-    LoRa.setSyncWord(0x34);
-  } else if (LORA_PROFILE == 2) {
-    LoRa.setSpreadingFactor(12);
-    LoRa.setSignalBandwidth(125E3);
-    LoRa.setCodingRate4(5);
-    LoRa.setSyncWord(0x34);
-  } else {
-    LoRa.setSpreadingFactor(12);
-    LoRa.setSignalBandwidth(62.5E3);
-    LoRa.setCodingRate4(8);
-    LoRa.setSyncWord(0x34);
-  }
-}
-
-static void printRadioProfile() {
-  Serial.print("LoRa profile "); Serial.println(LORA_PROFILE);
-}
 
 // --- TMP36 Sensor Pin Definitions ---
 #define TMP36_PIN1 A0  // First TMP36 sensor
@@ -201,35 +175,31 @@ void setup() {
   LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
   LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(5);
-  LoRa.setPreambleLength(8);
+  LoRa.setCodingRate4(1);
   LoRa.setSyncWord(0x12);
-  LoRa.disableCrc();
   Serial.print("Freq:433.00MHz  SF:7  BW:125kHz  CR:5");
-  
-  Serial.println("LoRa OK");
-  
+
   // Send test message
   LoRa.beginPacket();
   LoRa.print("TEST:OK");
   LoRa.endPacket();
   
-  Serial.println("Ready!");
+  Serial.println("LoRa OK");
 }
 
 void loop() {
   Serial.println("Loop start");
   
   // Read temperatures from all sensors
-  float bmeTemp = 0.0;
+  float bmpTemp = 0.0;
   float tmp36Temp1 = readTMP36(TMP36_PIN1, tmp36Calibration1);
   float tmp36Temp2 = readTMP36(TMP36_PIN2, tmp36Calibration2);
   
   // Read BMP280 temperature if sensor is available
   if (bmp280SensorFound) {
-    bmeTemp = bmp280.readTemperature();
-    if (isnan(bmeTemp)) {
-      bmeTemp = 0.0;
+    bmpTemp = bmp280.readTemperature();
+    if (isnan(bmpTemp)) {
+      bmpTemp = 0.0;
     }
   }
 
@@ -240,36 +210,23 @@ void loop() {
   Serial.print(tmp36Temp2, 1);
   if (bmp280SensorFound) {
     Serial.print(" BMP:");
-    Serial.print(bmeTemp, 1);
+    Serial.print(bmpTemp, 1);
   }
   Serial.println();
 
   // Create a data string to send (format: "SEQ:n,BMP:23.45,T1:24.12,T2:25.67")
-  String dataString;
-  if (bmp280SensorFound) {
-    dataString = String("SEQ:") + String(sendSeq++) + ",BMP:" + String(bmeTemp, 2) + ",T1:" + String(tmp36Temp1, 2) + ",T2:" + String(tmp36Temp2, 2);
-  } else {
-    dataString = String("SEQ:") + String(sendSeq++) + ",BMP:" + String(0.0, 2) + ",T1:" + String(tmp36Temp1, 2) + ",T2:" + String(tmp36Temp2, 2);
-  }
+  String dataString = "BMP:" + String(bmpTemp, 2) +
+                      ",T1:" + String(tmp36Temp1, 2) +
+                      ",T2:" + String(tmp36Temp2, 2);
   
   // Send LoRa packet
-  Serial.println("About to send packet");
-  LoRa.idle();
-  delay(10); // Small delay to ensure idle mode is set
-  
-  if (LoRa.beginPacket()) {
-    // Temporarily send test message to see if receiver can get it
-    LoRa.print("TEST:LOOP");
-    LoRa.endPacket();
-    delay(10); // Small delay after transmission
-    LoRa.idle(); // Return to idle mode after transmission
-  } else {
-    Serial.println("Failed to begin packet");
-  }
+  LoRa.beginPacket();
+  LoRa.print(dataString);
+  LoRa.endPacket();
   
   Serial.println("Sent: " + dataString);
   Serial.println("Loop end");
   
   // Wait before sending the next packet
-  delay(1000);
+  delay(3000);
 }

@@ -8,7 +8,18 @@
 #define LORA_RST   9
 #define LORA_DIO0  2
 
+// --- LoRa Frequency ---
+// Must match the transmitter's frequency! (433MHz)
+#define LORA_FREQUENCY 433000000 
+
+// --- LoRa Radio Profile (must match the transmitter) ---
+// 1: SF7/BW125/CR5 Sync 0x34 (default)
+// 2: SF12/BW125/CR5 Sync 0x34 (longer range)
+// 3: SF12/BW62.5/CR8 Sync 0x12 (compatibility)
+
 // --- LCD Setup ---
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+// Note: Your I2C address might be 0x3F. If it doesn't work, try that.
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Variables to store temperature values
@@ -19,14 +30,19 @@ int rssi = 0;
 unsigned long lastUpdateTime = 0;
 unsigned long lastSeq = 0;
 bool haveSeq = false;
+unsigned long lastHeartbeat = 0;
+unsigned long lastReceiveMode = 0;
+
+
+// Removed unused auto-scan functions
 
 void setup() {
   Serial.begin(9600);
-  delay(1000);
+  delay(1000); 
   
-  Serial.println("LoRa Temp Receiver (Working Version)");
+  Serial.println("LoRa Temp Receiver 2 (BMP)");
 
-  // Initialize I2C
+  // --- Initialize I2C ---
   Wire.begin();
   
   // Initialize LCD
@@ -34,65 +50,65 @@ void setup() {
   lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Temp Receiver");
-  lcd.setCursor(0, 1);
-  lcd.print("Waiting...");
+  lcd.print("Temp Receiver 2");
   
   Serial.println("LCD OK");
 
   // Initialize LoRa
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
-  if (!LoRa.begin(433E6)) {
+  if (!LoRa.begin(LORA_FREQUENCY)) {
     Serial.println("LoRa failed!");
     lcd.clear();
     lcd.print("LoRa Failed!");
     while (1);
   }
   
-  // Use exact same settings as working test
+  // --- Configure LoRa Parameters to EXACTLY MATCH the Sender ---
+  // Use exact same settings as the sender
+  LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
   LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(5);
-  LoRa.setPreambleLength(8);
+  LoRa.setCodingRate4(1);
   LoRa.setSyncWord(0x12);
-  LoRa.disableCrc();
-  
+
+  Serial.println("LoRa OK, waiting for packets...");
   LoRa.receive();
-  Serial.println("LoRa OK");
   
-  // Show initial message
+  // Show initial message on LCD
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("No Data");
   lcd.setCursor(0, 1);
   lcd.print("Waiting...");
-  
-  Serial.println("Ready!");
 }
 
 void loop() {
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
-    Serial.print("Received: ");
+    Serial.print("Packet received, size: ");
+    Serial.println(packetSize);
+    // Received a packet
+    lastUpdateTime = millis(); // Update the timestamp as soon as we get a packet
+
     String receivedString = "";
     while (LoRa.available()) {
       receivedString += (char)LoRa.read();
     }
-    Serial.print(receivedString);
-    Serial.print("  RSSI: ");
-    Serial.println(LoRa.packetRssi());
     
     rssi = LoRa.packetRssi();
-    lastUpdateTime = millis();
-    
-    // Parse the received string
+    Serial.print("Received packet: '");
+    Serial.print(receivedString);
+    Serial.print("' with RSSI: ");
+    Serial.println(rssi);
+
+    // --- Parse the received string ---
     bool dataValid = false;
     
-    // Check for test message first
+    // Check for TEST message (initial connection test)
     if (receivedString.indexOf("TEST:") != -1) {
       Serial.println("Test OK!");
       dataValid = true;
-      
+
       // Show test message on LCD
       lcd.clear();
       lcd.setCursor(0, 0);
@@ -101,18 +117,18 @@ void loop() {
       lcd.print(receivedString);
     }
     // Check for temperature data
-    else if (receivedString.indexOf("BMP:") != -1 && 
-        receivedString.indexOf("T1:") != -1 && 
+    else if (receivedString.indexOf("BMP:") != -1 &&
+        receivedString.indexOf("T1:") != -1 &&
         receivedString.indexOf("T2:") != -1) {
-      
-      // Parse BMP temperature
+
+      // Parse BMP085 temperature
       int bmp_start = receivedString.indexOf("BMP:") + 4;
       int bmp_end = receivedString.indexOf(",T1:");
       if (bmp_start >= 4 && bmp_end > bmp_start) {
         String bmp_str = receivedString.substring(bmp_start, bmp_end);
         bmpTemp = bmp_str.toFloat();
       }
-      
+
       // Parse TMP36 Sensor 1 temperature
       int t1_start = receivedString.indexOf("T1:") + 3;
       int t1_end = receivedString.indexOf(",T2:");
@@ -120,49 +136,54 @@ void loop() {
         String t1_str = receivedString.substring(t1_start, t1_end);
         tmp36Temp1 = t1_str.toFloat();
       }
-      
+
       // Parse TMP36 Sensor 2 temperature
       int t2_start = receivedString.indexOf("T2:") + 3;
       if (t2_start >= 3) {
         String t2_str = receivedString.substring(t2_start);
         tmp36Temp2 = t2_str.toFloat();
       }
-      
+
       dataValid = true;
     }
     
     if (dataValid) {
-      // Update the LCD Display
+      // --- Update the LCD Display ---
       lcd.clear();
-      
+
       // Line 1: TMP36 Sensor 1 and TMP36 Sensor 2 temperatures (integers)
       lcd.setCursor(0, 0);
       lcd.print((int)tmp36Temp1);
       lcd.print(":");
       lcd.print((int)tmp36Temp2);
-      
-      // Line 2: BMP temperature and RSSI
+
+      // Line 2: BMP085 temperature and RSSI separated by ":"
       lcd.setCursor(0, 1);
       lcd.print((int)bmpTemp);
+      lcd.print(":");
       lcd.print(" RSSI:");
       lcd.print(rssi);
+
     }
-    
-    // Re-enter receive mode after processing a packet
-    LoRa.receive();
-  } else {
-    // If no packet received, ensure we're still in receive mode
     LoRa.receive();
   }
-  
-  // Show "no data" message if no updates for 5 seconds
-  if (millis() - lastUpdateTime > 5000 && lastUpdateTime != 0) {
+  // Show "no data" message if no updates for 30 seconds
+  if (millis() - lastUpdateTime > 30000 && lastUpdateTime != 0) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("No Data");
     lcd.setCursor(0, 1);
     lcd.print("Check Transmitter");
   }
-  
-  delay(10);
+
+  // Show "no data" message initially
+  if (lastUpdateTime == 0) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("No Data");
+    lcd.setCursor(0, 1);
+    lcd.print("Waiting...");
+  }
+
+  delay(500);
 }

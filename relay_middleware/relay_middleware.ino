@@ -8,7 +8,7 @@ const int SENSOR_PIN = A0;
 
 // The voltage threshold. If the input voltage is above this, the relay turns ON.
 // You can change this to any value, for example 2.0, 0.5, etc.
-const float THRESHOLD_VOLTAGE = 2.5;
+const float THRESHOLD_VOLTAGE = 3.2;
 
 
 // --- Main Program (Do not change below unless you know what you are doing) ---
