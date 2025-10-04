@@ -68,8 +68,8 @@ void setup() {
   LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
   LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(1);
-  LoRa.setSyncWord(0x12);
+  LoRa.setCodingRate4(5);
+  LoRa.setSyncWord(0x34);
 
   Serial.println("LoRa OK, waiting for packets...");
   LoRa.receive();
@@ -185,5 +185,5 @@ void loop() {
     lcd.print("Waiting...");
   }
 
-  delay(500);
+  delay(100);
 }

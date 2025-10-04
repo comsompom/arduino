@@ -10,7 +10,7 @@
 
 // --- LoRa Frequency ---
 // 433E6 for Asia (433MHz), 868E6 for Europe, 915E6 for North America
-#define LORA_FREQUENCY 433000000 
+#define LORA_FREQUENCY 433000000
 
 // --- LoRa Radio Profile (try different profiles if not receiving) ---
 // 1: SF7/BW125/CR5 Sync 0x34 (default)
@@ -63,14 +63,14 @@ float tmp36Calibration2 = 0.0;  // Offset for TMP36 sensor 2
 float readTMP36Raw(int pin) {
   // Read the raw analog value from the sensor (0-1023)
   int sensorVal = analogRead(pin);
-  
+
   // Convert the raw value to a voltage (0.0V - 5.0V)
   float voltage = (sensorVal / 1024.0) * 5.0;
-  
+
   // Convert the voltage to temperature in Celsius
   // Formula: Temp C = (Voltage - 0.5) * 100
   float temperatureC = (voltage - 0.5) * 100;
-  
+
   return temperatureC;
 }
 
@@ -83,15 +83,15 @@ float readTMP36(int pin, float calibrationOffset) {
 void setup() {
   Serial.begin(9600);
   delay(1000); // Give serial time to initialize
-  
+
   Serial.println("LoRa Temp Transmitter (BMP280)");
 
   // Initialize I2C
   Wire.begin();
   // Faster I2C can sometimes help with unstable modules; safe for most Arduino boards
-  Wire.setClock(400000);
-  delay(10);
-  
+//   Wire.setClock(400000);
+  delay(1000);
+
   // Quick I2C scan to help diagnose address and wiring issues
   Serial.println("Scanning I2C bus...");
   uint8_t foundCount = 0;
@@ -108,7 +108,7 @@ void setup() {
   if (foundCount == 0) {
     Serial.println("No I2C devices found. Check SDA/SCL wiring and power.");
   }
-  
+
   // Initialize the BMP280 sensor (probe both 0x76 and 0x77, read chip ID, soft-reset, then begin)
   const uint8_t candidateAddrs[2] = {0x76, 0x77};
   for (uint8_t i = 0; i < 2 && !bmp280SensorFound; i++) {
@@ -151,7 +151,7 @@ void setup() {
 
   // Wait for sensors to stabilize
   delay(1000);
-  
+
   // Perform calibration based on BMP280 sensor (if available)
   if (bmp280SensorFound) {
     float bmpReferenceTemp = bmp280.readTemperature();
@@ -170,31 +170,31 @@ void setup() {
     Serial.println("LoRa failed!");
     while (1);
   }
-  
+
   // Use exact same settings as working test
   LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
   LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(1);
-  LoRa.setSyncWord(0x12);
-  Serial.print("Freq:433.00MHz  SF:7  BW:125kHz  CR:5");
+  LoRa.setCodingRate4(1);  // the previous has 5
+  LoRa.setSyncWord(0x34);  // the previous has 0x34
+  Serial.println("Freq:433.00MHz  SF:7  BW:125kHz  CR:1  Sync:0x12");
 
   // Send test message
   LoRa.beginPacket();
-  LoRa.print("TEST:OK");
+  LoRa.println("TEST:OK");
   LoRa.endPacket();
-  
+
   Serial.println("LoRa OK");
 }
 
 void loop() {
   Serial.println("Loop start");
-  
+
   // Read temperatures from all sensors
   float bmpTemp = 0.0;
   float tmp36Temp1 = readTMP36(TMP36_PIN1, tmp36Calibration1);
   float tmp36Temp2 = readTMP36(TMP36_PIN2, tmp36Calibration2);
-  
+
   // Read BMP280 temperature if sensor is available
   if (bmp280SensorFound) {
     bmpTemp = bmp280.readTemperature();
@@ -218,15 +218,15 @@ void loop() {
   String dataString = "BMP:" + String(bmpTemp, 2) +
                       ",T1:" + String(tmp36Temp1, 2) +
                       ",T2:" + String(tmp36Temp2, 2);
-  
+
   // Send LoRa packet
   LoRa.beginPacket();
   LoRa.print(dataString);
   LoRa.endPacket();
-  
+
   Serial.println("Sent: " + dataString);
   Serial.println("Loop end");
-  
+
   // Wait before sending the next packet
   delay(3000);
 }
