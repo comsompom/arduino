@@ -172,12 +172,12 @@ void setup() {
   }
 
   // Use exact same settings as working test
-  LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
+  LoRa.setTxPower(10, PA_OUTPUT_PA_BOOST_PIN);
   LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
   LoRa.setCodingRate4(1);  // the previous has 5
-  LoRa.setSyncWord(0x34);  // the previous has 0x34
-  Serial.println("Freq:433.00MHz  SF:7  BW:125kHz  CR:1  Sync:0x12");
+  // LoRa.setSyncWord(0x34);  // the previous has 0x34
+  // Serial.println("Freq:433.00MHz  SF:7  BW:125kHz  CR:1  Sync:0x12");
 
   // Send test message
   LoRa.beginPacket();
@@ -189,6 +189,7 @@ void setup() {
 
 void loop() {
   Serial.println("Loop start");
+  Serial.println(sendSeq);
 
   // Read temperatures from all sensors
   float bmpTemp = 0.0;
@@ -222,11 +223,12 @@ void loop() {
   // Send LoRa packet
   LoRa.beginPacket();
   LoRa.print(dataString);
-  LoRa.endPacket();
+  LoRa.endPacket(true);
 
   Serial.println("Sent: " + dataString);
   Serial.println("Loop end");
+  sendSeq += 1;
 
   // Wait before sending the next packet
-  delay(3000);
+  delay(1000);
 }
