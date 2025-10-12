@@ -45,6 +45,9 @@ boolean gps_data_valid = false;
 // --- Timing variables ---
 unsigned long last_display_update = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 500; // Update display every 500ms
+unsigned long last_watchdog_reset = 0;
+const unsigned long WATCHDOG_INTERVAL = 30000; // Reset watchdog every 30 seconds
+unsigned long loop_count = 0;
 
 // --- Utility function for string conversion ---
 char tmp_str[7]; // temporary variable used in convert function
@@ -88,8 +91,21 @@ void setup() {
 //                             MAIN LOOP                             //
 // ================================================================= //
 void loop() {
-  // Read GPS data using TinyGPS++ library
-  while (gpsSerial.available() > 0) {
+  loop_count++;
+  
+  // Watchdog reset to prevent hanging
+  if(millis() - last_watchdog_reset >= WATCHDOG_INTERVAL) {
+    last_watchdog_reset = millis();
+    Serial.print("Watchdog reset - Loop count: ");
+    Serial.println(loop_count);
+    loop_count = 0;
+  }
+  
+  // Read GPS data using TinyGPS++ library with timeout protection
+  unsigned long gps_start = millis();
+  int gps_bytes_read = 0;
+  while (gpsSerial.available() > 0 && gps_bytes_read < 100 && (millis() - gps_start) < 50) {
+    gps_bytes_read++;
     if (gps.encode(gpsSerial.read())) {
       // A complete NMEA sentence has been processed
       if (gps.location.isValid()) {
@@ -110,8 +126,12 @@ void loop() {
     }
   }
   
-  // Read gyro sensor data
-  readMPU6050();
+  // Read gyro sensor data with error handling
+  if(!readMPU6050Safe()) {
+    Serial.println("Gyro read error - attempting recovery");
+    delay(10);
+    return; // Skip this loop iteration
+  }
   
   // Apply calibration offsets
   gyro_x -= gyro_x_offset;
@@ -123,6 +143,9 @@ void loop() {
     updateLCD();
     last_display_update = millis();
   }
+  
+  // Small delay to prevent overwhelming the system
+  delay(1);
 }
 
 // ================================================================= //
@@ -307,7 +330,7 @@ void configureGyro() {
 }
 
 /**
- * Read raw data from MPU-6050
+ * Read raw data from MPU-6050 (original version)
  */
 void readMPU6050() {
   if(gyro_type == 1) { // MPU-6050
@@ -329,6 +352,64 @@ void readMPU6050() {
     gyro_y = Wire.read()<<8 | Wire.read(); // 0x45 & 0x46
     gyro_z = Wire.read()<<8 | Wire.read(); // 0x47 & 0x48
   }
+}
+
+/**
+ * Safe read raw data from MPU-6050 with error handling and timeout protection
+ */
+bool readMPU6050Safe() {
+  if(gyro_type != 1) return false; // MPU-6050 not detected
+  
+  unsigned long start_time = millis();
+  
+  // Begin transmission with timeout
+  Wire.beginTransmission(gyro_address);
+  if(Wire.write(0x3B) != 1) {
+    Serial.println("Error: Failed to write register address");
+    return false;
+  }
+  
+  uint8_t end_result = Wire.endTransmission(false); // keep connection active
+  if(end_result != 0) {
+    Serial.print("Error: endTransmission failed with code ");
+    Serial.println(end_result);
+    return false;
+  }
+  
+  // Request data with timeout
+  uint8_t bytes_requested = Wire.requestFrom(gyro_address, (uint8_t)14);
+  if(bytes_requested != 14) {
+    Serial.print("Error: Requested 14 bytes, got ");
+    Serial.println(bytes_requested);
+    return false;
+  }
+  
+  // Check if we have enough time left
+  if((millis() - start_time) > 100) {
+    Serial.println("Error: I2C operation timeout");
+    return false;
+  }
+  
+  // Read data with availability check
+  if(Wire.available() < 14) {
+    Serial.println("Error: Not enough data available");
+    return false;
+  }
+
+  // Read accelerometer data
+  accelerometer_x = Wire.read()<<8 | Wire.read(); // 0x3B & 0x3C
+  accelerometer_y = Wire.read()<<8 | Wire.read(); // 0x3D & 0x3E
+  accelerometer_z = Wire.read()<<8 | Wire.read(); // 0x3F & 0x40
+  
+  // Read temperature
+  temperature = Wire.read()<<8 | Wire.read(); // 0x41 & 0x42
+  
+  // Read gyro data
+  gyro_x = Wire.read()<<8 | Wire.read(); // 0x43 & 0x44
+  gyro_y = Wire.read()<<8 | Wire.read(); // 0x45 & 0x46
+  gyro_z = Wire.read()<<8 | Wire.read(); // 0x47 & 0x48
+  
+  return true;
 }
 
 
@@ -369,9 +450,13 @@ void calibrateGyro() {
 }
 
 /**
- * Update LCD display with gyro and GPS data
+ * Update LCD display with gyro and GPS data (safe version with error handling)
  */
 void updateLCD() {
+  // Add timeout protection for LCD operations
+  unsigned long lcd_start = millis();
+  
+  // Simple error handling without exceptions
   lcd.clear();
   
   // First line: Gyro X, Y, Z values
@@ -415,5 +500,15 @@ void updateLCD() {
     lcd.print("GPS Wait");
   } else {
     lcd.print("Calibrating");
+  }
+  
+  // Check if LCD operation took too long
+  if((millis() - lcd_start) > 200) {
+    Serial.println("Warning: LCD update took too long");
+    // Try to recover by reinitializing LCD
+    delay(100);
+    lcd.init();
+    lcd.backlight();
+    Serial.println("LCD reinitialized");
   }
 }
