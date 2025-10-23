@@ -38,20 +38,7 @@ int noteDurations[] = {
 
 // --- You shouldn't need to change anything below this line ---
 
-// The ESP32's tone generation uses "channels". We'll use channel 0.
-const int ledcChannel = 0;
-// We also set a resolution and a base frequency. These values are standard.
-const int ledcResolution = 8;
-const int ledcBaseFreq = 5000;
-
 void setup() {
-  // Setup the LEDC PWM channel
-  // ledcSetup(channel, frequency, resolution)
-  ledcSetup(ledcChannel, ledcBaseFreq, ledcResolution);
-
-  // Attach the speaker pin to the LEDC channel
-  ledcAttachPin(speakerPin, ledcChannel);
-  
   Serial.begin(115200);
   Serial.println("Simple Melody Player - Starting now!");
 }
@@ -65,16 +52,16 @@ void loop() {
     // 1000 divided by the note type (e.g., 1000 / 4 for a quarter note).
     int noteDuration = 1000 / noteDurations[thisNote];
 
-    // Play the note on the specified channel
-    // ledcWriteTone(channel, frequency)
-    ledcWriteTone(ledcChannel, melody[thisNote]);
-    
+    // Play the note on the speaker pin
+    // tone(pin, frequency)
+    tone(speakerPin, melody[thisNote]);
+
     // Hold the note for its duration
     delay(noteDuration);
 
     // Stop the sound between notes to make them distinct
-    // We do this by setting the tone to 0 Hz, or silence.
-    ledcWriteTone(ledcChannel, 0);
+    // We do this by calling noTone() to stop the sound.
+    noTone(speakerPin);
 
     // Add a brief pause between notes
     delay(50);
