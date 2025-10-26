@@ -53,6 +53,16 @@ int noteDurations[] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 //----------------------------------------------------------------------
 bool melodyPlayed = false;
 bool gpsModuleFound = false;
+bool gyroCalibrated = false;
+
+// Gyro calibration offsets
+float gyroOffsetX = 0;
+float gyroOffsetY = 0;
+float gyroOffsetZ = 0;
+
+// Satellite count tracking for buzzer alerts
+int lastSatelliteCount = 0;
+bool lowSatelliteAlert = false;
 
 //======================================================================
 //  SETUP FUNCTION - Runs once at the beginning
@@ -72,7 +82,7 @@ void setup() {
   lcd.print("Initializing...");
   Serial.println("LCD Initialized.");
   delay(1000);
-  
+
   // Initialize MPU-6050
   if (!mpu.begin(0x68)) { // Check for MPU at address 0x68
     Serial.println("Failed to find MPU6050 chip");
@@ -88,6 +98,9 @@ void setup() {
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
   delay(1000);
+
+  // Calibrate Gyroscope
+  calibrateGyro();
 
   // Start GPS Serial
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
@@ -139,6 +152,13 @@ void loop() {
     }
   }
 
+  // Update gyro display continuously for immediate response
+  static unsigned long lastGyroUpdate = 0;
+  if (millis() - lastGyroUpdate > 50) { // Update every 50ms for responsive gyro
+    updateGyroDisplay();
+    lastGyroUpdate = millis();
+  }
+
   // If no GPS data is received after a while, show searching status
   if (millis() > 5000 && gps.charsProcessed() < 10) {
     static unsigned long lastUpdate = 0;
@@ -158,11 +178,63 @@ void loop() {
 //======================================================================
 
 /**
+ * @brief Calibrates the gyroscope by taking 2000 samples and calculating offsets.
+ */
+void calibrateGyro() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Gyro Calibration");
+  lcd.setCursor(0, 1);
+  lcd.print("Keep still...");
+  Serial.println("Starting gyro calibration - keep device still!");
+  
+  float sumX = 0, sumY = 0, sumZ = 0;
+  const int calibrationSamples = 2000;
+  
+  for (int i = 0; i < calibrationSamples; i++) {
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    
+    sumX += g.gyro.x;
+    sumY += g.gyro.y;
+    sumZ += g.gyro.z;
+    
+    // Update progress on LCD every 200 samples
+    if (i % 200 == 0) {
+      lcd.setCursor(0, 1);
+      lcd.print("Progress: ");
+      lcd.print((i * 100) / calibrationSamples);
+      lcd.print("%");
+    }
+    
+    delay(1); // Small delay between readings
+  }
+  
+  // Calculate offsets
+  gyroOffsetX = sumX / calibrationSamples;
+  gyroOffsetY = sumY / calibrationSamples;
+  gyroOffsetZ = sumZ / calibrationSamples;
+  
+  gyroCalibrated = true;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Calibration");
+  lcd.setCursor(0, 1);
+  lcd.print("Complete!");
+  Serial.print("Gyro calibration complete. Offsets - X: ");
+  Serial.print(gyroOffsetX, 3);
+  Serial.print(" Y: ");
+  Serial.print(gyroOffsetY, 3);
+  Serial.print(" Z: ");
+  Serial.println(gyroOffsetZ, 3);
+  delay(1500);
+}
+
+/**
  * @brief Reads all sensors and displays the information on the LCD.
  */
 void updateDisplay() {
-  lcd.clear();
-
   // --- LINE 1: GPS Coordinates ---
   lcd.setCursor(0, 0);
   if (gps.location.isValid()) {
@@ -171,8 +243,12 @@ void updateDisplay() {
     String lng_str = String(gps.location.lng(), 4);
     lcd.print(lat_str + ";" + lng_str);
 
-    // Play melody on first valid fix with enough satellites
-    if (gps.satellites.value() >= 4 && !melodyPlayed) {
+    // Check satellite count for buzzer alerts
+    int currentSatellites = gps.satellites.value();
+    checkSatelliteAlerts(currentSatellites);
+
+    // Play melody on first valid fix with enough satellites (only once)
+    if (currentSatellites >= 4 && !melodyPlayed) {
       Serial.println("GPS Fix Acquired! Playing melody.");
       playMelody();
       melodyPlayed = true;
@@ -181,25 +257,84 @@ void updateDisplay() {
     lcd.print("No GPS Fix");
   }
 
-  // --- LINE 2: Gyroscope Data ---
-  lcd.setCursor(0, 1);
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp); // Get new sensor readings
-
-  // Format the gyro output as G:X;Y;Z
-  lcd.print("G:");
-  lcd.print((int)g.gyro.x); // Display as integer for simplicity and space
-  lcd.print(";");
-  lcd.print((int)g.gyro.y);
-  lcd.print(";");
-  lcd.print((int)g.gyro.z);
-
   // Print detailed data to Serial Monitor for debugging
   Serial.print("Lat: "); Serial.print(gps.location.lat(), 6);
   Serial.print(" Lng: "); Serial.print(gps.location.lng(), 6);
-  Serial.print(" | Gyro X: "); Serial.print(g.gyro.x);
-  Serial.print(" Y: "); Serial.print(g.gyro.y);
-  Serial.print(" Z: "); Serial.println(g.gyro.z);
+  Serial.print(" | Satellites: ");
+  Serial.println(gps.satellites.value());
+}
+
+/**
+ * @brief Checks satellite count and plays appropriate buzzer alerts.
+ */
+void checkSatelliteAlerts(int currentSatellites) {
+  // Check for low satellite count (less than 2)
+  if (currentSatellites < 2 && currentSatellites > 0) {
+    if (!lowSatelliteAlert) {
+      Serial.println("Low satellite count! Playing alert.");
+      playLowSatelliteAlert();
+      lowSatelliteAlert = true;
+    }
+  }
+  // Check for satellite recovery (more than 4)
+  else if (currentSatellites >= 4 && lowSatelliteAlert) {
+    Serial.println("Satellite count recovered! Playing recovery alert.");
+    playSatelliteRecoveryAlert();
+    lowSatelliteAlert = false;
+  }
+  // Reset alert flag if satellites are between 2-4
+  else if (currentSatellites >= 2 && currentSatellites < 4) {
+    lowSatelliteAlert = false;
+  }
+  
+  lastSatelliteCount = currentSatellites;
+}
+
+/**
+ * @brief Plays a short beep for low satellite count.
+ */
+void playLowSatelliteAlert() {
+  tone(BUZZER_PIN, 1000, 200); // 1kHz tone for 200ms
+  delay(250);
+  noTone(BUZZER_PIN);
+}
+
+/**
+ * @brief Plays two short beeps for satellite recovery.
+ */
+void playSatelliteRecoveryAlert() {
+  tone(BUZZER_PIN, 1500, 150); // First beep
+  delay(200);
+  noTone(BUZZER_PIN);
+  delay(100);
+  tone(BUZZER_PIN, 1500, 150); // Second beep
+  delay(200);
+  noTone(BUZZER_PIN);
+}
+
+/**
+ * @brief Updates only the gyro display for immediate response.
+ */
+void updateGyroDisplay() {
+  if (!gyroCalibrated) return; // Don't update if not calibrated
+  
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp); // Get new sensor readings
+
+  // Apply calibration offsets
+  float calibratedX = g.gyro.x - gyroOffsetX;
+  float calibratedY = g.gyro.y - gyroOffsetY;
+  float calibratedZ = g.gyro.z - gyroOffsetZ;
+
+  // Only update the second line (gyro data) without clearing the screen
+  lcd.setCursor(0, 1);
+  lcd.print("G:");
+  lcd.print((int)(calibratedX * 100)); // Display as integer for simplicity and space
+  lcd.print(";");
+  lcd.print((int)(calibratedY * 100));
+  lcd.print(";");
+  lcd.print((int)(calibratedZ * 100));
+  lcd.print("    "); // Clear any remaining characters
 }
 
 /**
